@@ -258,6 +258,31 @@ public static class DeezerCdpService
         }
     }
 
+    public static async Task<bool> RemoveTrackAsync(int index)
+    {
+        if (index < 0) return false;
+        string script = $"window.dzPlayer && typeof window.dzPlayer.removeTracks === 'function' ? (window.dzPlayer.removeTracks({index}), true) : false";
+        return await ExecuteJsAsync(script);
+    }
+
+    public static async Task<bool> MoveTrackAsync(int fromIndex, int toIndex)
+    {
+        if (fromIndex < 0 || toIndex < 0 || fromIndex == toIndex) return false;
+        string script = $@"(() => {{
+            if (!window.dzPlayer || typeof window.dzPlayer.getTrackList !== 'function') return false;
+            let tracks = window.dzPlayer.getTrackList();
+            if (!tracks || {fromIndex} < 0 || {fromIndex} >= tracks.length || {toIndex} < 0 || {toIndex} >= tracks.length) return false;
+            let item = tracks.splice({fromIndex}, 1)[0];
+            tracks.splice({toIndex}, 0, item);
+            if (typeof window.dzPlayer.setTrackList === 'function') {{
+                window.dzPlayer.setTrackList(tracks);
+                return true;
+            }}
+            return false;
+        }})()";
+        return await ExecuteJsAsync(script);
+    }
+
     private static int GetIntSafe(JsonElement elem, string propName)
     {
         if (elem.TryGetProperty(propName, out var p))

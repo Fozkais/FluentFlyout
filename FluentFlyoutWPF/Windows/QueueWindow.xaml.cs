@@ -20,6 +20,8 @@ public partial class QueueWindow : MicaWindow
     private readonly MainWindow _mainWindow = (MainWindow)Application.Current.MainWindow;
     private string _contextSource = string.Empty;
     private System.Windows.Threading.DispatcherTimer? _autoCloseTimer;
+    private List<DeezerTrack> _fullQueue = new();
+    private Point _dragStartPoint;
 
     public QueueWindow(string currentTitle, string currentArtist)
     {
@@ -118,10 +120,11 @@ public partial class QueueWindow : MicaWindow
         _ = DeezerCdpService.EnsureDeezerRunningWithDebugPortAsync();
 
         var newTracks = await DeezerService.GetQueueAsync(currentTitle, currentArtist);
+        _fullQueue = newTracks ?? new List<DeezerTrack>();
 
         LoadingBar.Visibility = Visibility.Collapsed;
 
-        if (newTracks.Count == 0)
+        if (_fullQueue.Count == 0)
         {
             EmptyMessage.Visibility = Visibility.Visible;
             QueueListView.ItemsSource = null;
@@ -130,35 +133,22 @@ public partial class QueueWindow : MicaWindow
 
         EmptyMessage.Visibility = Visibility.Collapsed;
 
-        // Check if existing list has same tracks structure (same IDs/titles and count)
-        if (QueueListView.ItemsSource is List<DeezerTrack> existingTracks &&
-            existingTracks.Count == newTracks.Count &&
-            SameTracks(existingTracks, newTracks))
+        // Apply any active search filter
+        ApplyFilter();
+
+        // Auto-scroll to current track
+        int currentIdx = _fullQueue.FindIndex(t => t.IsCurrent);
+        if (currentIdx >= 0)
         {
-            // Same queue structure! Only update IsCurrent in place with 0 flicker!
-            for (int i = 0; i < existingTracks.Count; i++)
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () =>
             {
-                existingTracks[i].IsCurrent = newTracks[i].IsCurrent;
-                existingTracks[i].TargetIndex = newTracks[i].TargetIndex;
-            }
-        }
-        else
-        {
-            // Queue structure changed or initial load: set new ItemsSource
-            QueueListView.ItemsSource = newTracks;
-            int currentIdx = newTracks.FindIndex(t => t.IsCurrent);
-            if (currentIdx > 0)
-            {
-                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () =>
+                try
                 {
-                    try
-                    {
-                        var container = QueueListView.ItemContainerGenerator.ContainerFromIndex(currentIdx) as FrameworkElement;
-                        container?.BringIntoView();
-                    }
-                    catch { }
-                });
-            }
+                    var activeItem = _fullQueue[currentIdx];
+                    QueueListView.ScrollIntoView(activeItem);
+                }
+                catch { }
+            });
         }
 
         _contextSource = DeezerService.LastQueueSource;
@@ -169,100 +159,155 @@ public partial class QueueWindow : MicaWindow
             : $"Source : {_contextSource}  •  [{modeStr}]";
     }
 
-    private static bool SameTracks(List<DeezerTrack> a, List<DeezerTrack> b)
+    private void SearchToggleButton_Click(object sender, RoutedEventArgs e)
     {
-        for (int i = 0; i < a.Count; i++)
+        if (SearchTextBox.Visibility == Visibility.Visible)
         {
-            if (a[i].Id != b[i].Id && a[i].Title != b[i].Title)
-                return false;
+            SearchTextBox.Visibility = Visibility.Collapsed;
+            SearchTextBox.Text = string.Empty;
         }
-        return true;
-    }
-
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
-
-    private const byte VK_MEDIA_NEXT_TRACK = 0xB0;
-    private const uint KEYEVENTF_KEYUP = 0x0002;
-
-    private static void SendMediaNextKey()
-    {
-        keybd_event(VK_MEDIA_NEXT_TRACK, 0, 0, UIntPtr.Zero);
-        keybd_event(VK_MEDIA_NEXT_TRACK, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
-    }
-
-    /// <summary>
-    /// Plays the chosen track by absolute TargetIndex (CDP) or relative skip count with instant 0ms UI response.
-    /// </summary>
-    private async void PlayTrackButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not FrameworkElement fe) return;
-
-        try
+        else
         {
-            // Case A: Direct absolute index playback via CDP (instant 0ms visual feedback!)
-            if (fe.DataContext is DeezerTrack track && track.TargetIndex >= 0)
+            SearchTextBox.Visibility = Visibility.Visible;
+            SearchTextBox.Focus();
+        }
+    }
+
+    private void SearchTextBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        string query = SearchTextBox.Text?.Trim().ToLowerInvariant() ?? "";
+        if (string.IsNullOrEmpty(query))
+        {
+            QueueListView.ItemsSource = _fullQueue;
+        }
+        else
+        {
+            QueueListView.ItemsSource = _fullQueue
+                .Where(t => t.Title.ToLowerInvariant().Contains(query) || t.Artist.ToLowerInvariant().Contains(query))
+                .ToList();
+        }
+    }
+
+    private void PlayCover_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.DataContext is DeezerTrack track)
+        {
+            PlayTrack(track);
+        }
+    }
+
+    private async void RemoveTrackButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.DataContext is DeezerTrack track)
+        {
+            bool success = await DeezerCdpService.RemoveTrackAsync(track.TargetIndex);
+            if (success)
             {
-                // 1. Instant 0ms visual feedback: update IsCurrent in memory
-                if (QueueListView.ItemsSource is List<DeezerTrack> currentList)
-                {
-                    foreach (var t in currentList)
-                    {
-                        t.IsCurrent = (t.TargetIndex == track.TargetIndex);
-                    }
-                }
-
-                // 2. Trigger CDP playback in Deezer (instant)
-                bool cdpSuccess = await DeezerCdpService.PlayTrackAtIndexAsync(track.TargetIndex);
-                if (cdpSuccess)
-                {
-                    await Task.Delay(50); // Minimal 50ms buffer
-                    DeezerService.ClearCache();
-                    if (SettingsManager.Current.QueueCloseOnTrackClick)
-                    {
-                        CloseWithAnimation();
-                    }
-                    else
-                    {
-                        LoadQueue("", ""); // Quiet background update (0 flicker!)
-                    }
-                    return;
-                }
-            }
-
-            // Case B: Fallback to relative skip count if TargetIndex wasn't set or CDP failed
-            if (int.TryParse(fe.Tag?.ToString(), out int skipCount) && skipCount > 0)
-            {
-                var activeSession = _mainWindow.GetActiveMediaSession();
-                bool cdpSuccess = await DeezerCdpService.SkipTracksAsync(skipCount);
-                if (!cdpSuccess)
-                {
-                    for (int i = 0; i < skipCount; i++)
-                    {
-                        bool success = false;
-                        if (activeSession != null)
-                        {
-                            success = await activeSession.ControlSession.TrySkipNextAsync();
-                        }
-
-                        if (!success)
-                        {
-                            SendMediaNextKey();
-                        }
-
-                        if (i < skipCount - 1)
-                            await Task.Delay(50);
-                    }
-                }
-                await Task.Delay(50);
                 DeezerService.ClearCache();
                 LoadQueue("", "");
             }
         }
-        catch (Exception ex)
+    }
+
+    private async void PlayTrack(DeezerTrack track)
+    {
+        if (track == null || track.TargetIndex < 0) return;
+
+        if (QueueListView.ItemsSource is List<DeezerTrack> currentList)
         {
-            System.Diagnostics.Debug.WriteLine($"Play track error: {ex.Message}");
+            foreach (var t in currentList)
+            {
+                t.IsCurrent = (t.TargetIndex == track.TargetIndex);
+            }
         }
+
+        bool cdpSuccess = await DeezerCdpService.PlayTrackAtIndexAsync(track.TargetIndex);
+        if (cdpSuccess)
+        {
+            await Task.Delay(50);
+            DeezerService.ClearCache();
+            if (SettingsManager.Current.QueueCloseOnTrackClick)
+            {
+                CloseWithAnimation();
+            }
+            else
+            {
+                LoadQueue("", "");
+            }
+        }
+    }
+
+    private void PlayTrackButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.DataContext is DeezerTrack track)
+        {
+            PlayTrack(track);
+        }
+    }
+
+    // Drag & Drop Reordering
+    private void QueueListView_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _dragStartPoint = e.GetPosition(null);
+    }
+
+    private void QueueListView_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed) return;
+
+        Vector diff = _dragStartPoint - e.GetPosition(null);
+        if (Math.Abs(diff.X) > SystemParameters.MinimumHorizontalDragDistance ||
+            Math.Abs(diff.Y) > SystemParameters.MinimumVerticalDragDistance)
+        {
+            var listView = sender as ListView;
+            var listViewItem = FindAncestor<ListViewItem>((DependencyObject)e.OriginalSource);
+            if (listViewItem == null) return;
+
+            var draggedTrack = (DeezerTrack)listView.ItemContainerGenerator.ItemFromContainer(listViewItem);
+            if (draggedTrack == null) return;
+
+            DragDrop.DoDragDrop(listViewItem, draggedTrack, DragDropEffects.Move);
+        }
+    }
+
+    private async void QueueListView_Drop(object sender, DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent(typeof(DeezerTrack))) return;
+
+        var droppedTrack = (DeezerTrack)e.Data.GetData(typeof(DeezerTrack));
+        var targetItem = FindAncestor<ListViewItem>((DependencyObject)e.OriginalSource);
+        if (targetItem == null) return;
+
+        var targetTrack = (DeezerTrack)QueueListView.ItemContainerGenerator.ItemFromContainer(targetItem);
+        if (targetTrack == null || droppedTrack == targetTrack) return;
+
+        int fromIndex = droppedTrack.TargetIndex;
+        int toIndex = targetTrack.TargetIndex;
+
+        if (fromIndex >= 0 && toIndex >= 0)
+        {
+            bool success = await DeezerCdpService.MoveTrackAsync(fromIndex, toIndex);
+            if (success)
+            {
+                DeezerService.ClearCache();
+                LoadQueue("", "");
+            }
+        }
+    }
+
+    private static T? FindAncestor<T>(DependencyObject current) where T : DependencyObject
+    {
+        do
+        {
+            if (current is T ancestor) return ancestor;
+            current = System.Windows.Media.VisualTreeHelper.GetParent(current);
+        } while (current != null);
+        return null;
     }
 
     private async void AuthButton_Click(object sender, RoutedEventArgs e)

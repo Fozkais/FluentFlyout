@@ -19,12 +19,13 @@
     <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <Grid Grid.Row="0" Margin="0,0,0,10">
+        <Grid Grid.Row="0" Margin="0,0,0,8">
             <StackPanel Orientation="Vertical">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <ui:SymbolIcon Symbol="List20" Filled="True" FontSize="18" Margin="0,0,8,0"/>
@@ -32,82 +33,126 @@
                 </StackPanel>
                 <TextBlock Name="ContextLabel" Text="" FontSize="11" Opacity="0.55" Margin="0,2,0,0"/>
             </StackPanel>
-            <ui:Button Name="CloseButton" Appearance="Transparent" Icon="{ui:SymbolIcon Dismiss20}" HorizontalAlignment="Right" VerticalAlignment="Top" Click="CloseButton_Click"/>
+            
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+                <ui:Button Name="SearchToggleButton" Appearance="Transparent" Icon="{ui:SymbolIcon Search20}" Margin="0,0,4,0" ToolTip="Rechercher un titre" Click="SearchToggleButton_Click"/>
+                <ui:Button Name="CloseButton" Appearance="Transparent" Icon="{ui:SymbolIcon Dismiss20}" ToolTip="Fermer" Click="CloseButton_Click"/>
+            </StackPanel>
         </Grid>
 
+        <!-- Search Bar (Collapsible) -->
+        <ui:TextBox Name="SearchTextBox" Grid.Row="1" PlaceholderText="Rechercher un titre ou un artiste..." ClearButtonEnabled="True" Margin="0,0,0,8" Visibility="Collapsed" TextChanged="SearchTextBox_TextChanged"/>
+
         <!-- Loading / Queue List -->
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="2">
             <ProgressBar Name="LoadingBar" IsIndeterminate="True" Height="4" VerticalAlignment="Top" Visibility="Collapsed"/>
             <TextBlock Name="EmptyMessage" Text="Aucun morceau dans la file d'attente." HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.6" Visibility="Collapsed"/>
 
-            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                <ItemsControl Name="QueueListView">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Border CornerRadius="6" Padding="6,4" Margin="0,2">
-                                <Border.Style>
-                                    <Style TargetType="Border">
-                                        <Setter Property="Background" Value="Transparent"/>
-                                        <Style.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.ControlFillColorSecondary}"/>
-                                            </Trigger>
-                                            <DataTrigger Binding="{Binding IsCurrent}" Value="True">
-                                                <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.ControlFillColorTertiary}"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="36"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
+            <ListView Name="QueueListView"
+                      ScrollViewer.VerticalScrollBarVisibility="Auto"
+                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                      Background="Transparent"
+                      BorderThickness="0"
+                      Padding="0"
+                      AllowDrop="True"
+                      PreviewMouseLeftButtonDown="QueueListView_PreviewMouseLeftButtonDown"
+                      MouseMove="QueueListView_MouseMove"
+                      Drop="QueueListView_Drop">
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="Padding" Value="0"/>
+                        <Setter Property="Margin" Value="0,1"/>
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListViewItem">
+                                    <ContentPresenter />
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </ListView.ItemContainerStyle>
 
-                                    <!-- Cover -->
-                                    <Border Grid.Column="0" CornerRadius="4" ClipToBounds="True" Width="36" Height="36">
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <Border x:Name="ItemBorder" CornerRadius="6" Padding="6,4" Margin="0,1">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="Transparent"/>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.ControlFillColorSecondary}"/>
+                                        </Trigger>
+                                        <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.ControlFillColorTertiary}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="36"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Cover with Play Overlay on Hover -->
+                                <Grid Grid.Column="0" Width="36" Height="36" Cursor="Hand" MouseLeftButtonDown="PlayCover_Click">
+                                    <Border CornerRadius="4" ClipToBounds="True" Width="36" Height="36">
                                         <Image Source="{Binding CoverUrl}" Stretch="UniformToFill"/>
                                     </Border>
-
-                                    <!-- Title / Artist -->
-                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="10,0,8,0">
-                                        <TextBlock Text="{Binding Title}" FontWeight="Medium" TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock Text="{Binding Artist}" FontSize="11" Opacity="0.6" TextTrimming="CharacterEllipsis"/>
-                                    </StackPanel>
-
-                                    <!-- Play / Playing Status Button -->
-                                    <ui:Button Grid.Column="2"
-                                               Appearance="Transparent"
-                                               Icon="{ui:SymbolIcon Play20, Filled=True}"
-                                               ToolTip="Jouer ce titre"
-                                               Width="32" Height="32"
-                                               Padding="0"
-                                               VerticalAlignment="Center"
-                                               HorizontalAlignment="Center"
-                                               Click="PlayTrackButton_Click">
-                                        <ui:Button.Style>
-                                            <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsCurrent}" Value="True">
-                                                        <Setter Property="Icon" Value="{ui:SymbolIcon Speaker220, Filled=True}"/>
-                                                        <Setter Property="ToolTip" Value="En cours de lecture"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </ui:Button.Style>
-                                    </ui:Button>
-
+                                    <Border x:Name="PlayOverlay" CornerRadius="4" Background="#A0000000" Opacity="0" ToolTip="Jouer ce titre">
+                                        <ui:SymbolIcon Symbol="Play20" Filled="True" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
                                 </Grid>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </ScrollViewer>
+
+                                <!-- Title / Artist -->
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="10,0,8,0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ui:SymbolIcon Symbol="Speaker220" Filled="True" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorPrimary}">
+                                            <ui:SymbolIcon.Style>
+                                                <Style TargetType="ui:SymbolIcon">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </ui:SymbolIcon.Style>
+                                        </ui:SymbolIcon>
+                                        <TextBlock Text="{Binding Title}" FontWeight="Medium" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding Artist}" FontSize="11" Opacity="0.6" TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+
+                                <!-- Delete Button ('X') -->
+                                <ui:Button Grid.Column="2"
+                                           Appearance="Transparent"
+                                           Icon="{ui:SymbolIcon Dismiss16}"
+                                           ToolTip="Supprimer de la file d'attente"
+                                           Width="28" Height="28"
+                                           Padding="0"
+                                           VerticalAlignment="Center"
+                                           HorizontalAlignment="Center"
+                                           Click="RemoveTrackButton_Click">
+                                </ui:Button>
+
+                            </Grid>
+                        </Border>
+                        <DataTemplate.Triggers>
+                            <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=ListViewItem}, Path=IsMouseOver}" Value="True">
+                                <Setter TargetName="PlayOverlay" Property="Opacity" Value="1"/>
+                            </DataTrigger>
+                        </DataTemplate.Triggers>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
         </Grid>
 
         <!-- Auth Footer -->
-        <Border Grid.Row="2" Margin="0,10,0,0" Padding="8,4" Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}" CornerRadius="6">
+        <Border Grid.Row="3" Margin="0,10,0,0" Padding="8,4" Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}" CornerRadius="6">
             <Grid>
                 <TextBlock Name="AuthStatusText" Text="Mode Connecté" FontSize="11" VerticalAlignment="Center" Opacity="0.7"/>
                 <ui:Button Name="AuthButton" Content="Se connecter à Deezer" Appearance="Primary" HorizontalAlignment="Right" Click="AuthButton_Click"/>
