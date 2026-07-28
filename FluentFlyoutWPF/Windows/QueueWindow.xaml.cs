@@ -10,14 +10,15 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 
+using WindowsMediaController;
+using GlobalSystemMediaTransportControlsSessionMediaProperties = Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties;
+
 namespace FluentFlyoutWPF.Windows;
 
 public partial class QueueWindow : MicaWindow
 {
     private readonly MainWindow _mainWindow = (MainWindow)Application.Current.MainWindow;
     private string _contextSource = string.Empty;
-
-    private readonly System.Windows.Threading.DispatcherTimer _refreshTimer;
     private System.Windows.Threading.DispatcherTimer? _autoCloseTimer;
 
     public QueueWindow(string currentTitle, string currentArtist)
@@ -49,13 +50,8 @@ public partial class QueueWindow : MicaWindow
 
         LoadQueue(currentTitle, currentArtist);
 
-        // Live background sync timer (1.5s interval)
-        _refreshTimer = new System.Windows.Threading.DispatcherTimer
-        {
-            Interval = TimeSpan.FromSeconds(1.5)
-        };
-        _refreshTimer.Tick += (s, e) => LoadQueue("", "");
-        _refreshTimer.Start();
+        // Event-driven track change listener (0 periodic polling overhead)
+        _mainWindow.mediaManager.OnAnyMediaPropertyChanged += MediaManager_OnAnyMediaPropertyChanged;
 
         MouseEnter += (s, e) => _autoCloseTimer?.Stop();
         MouseLeave += (s, e) =>
@@ -78,9 +74,21 @@ public partial class QueueWindow : MicaWindow
 
         Closed += (s, e) =>
         {
-            _refreshTimer.Stop();
             _autoCloseTimer?.Stop();
+            _mainWindow.mediaManager.OnAnyMediaPropertyChanged -= MediaManager_OnAnyMediaPropertyChanged;
         };
+    }
+
+    private void MediaManager_OnAnyMediaPropertyChanged(MediaManager.MediaSession mediaSession, GlobalSystemMediaTransportControlsSessionMediaProperties mediaProperties)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            string appId = mediaSession?.ControlSession?.SourceAppUserModelId ?? "";
+            if (appId.Contains("deezer", StringComparison.OrdinalIgnoreCase))
+            {
+                LoadQueue(mediaProperties?.Title ?? "", mediaProperties?.Artist ?? "");
+            }
+        });
     }
 
     private void UpdateAuthStatus()
