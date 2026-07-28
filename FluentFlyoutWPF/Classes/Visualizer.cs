@@ -268,8 +268,11 @@ namespace FluentFlyoutWPF.Classes
 
             _isRunning = false;
 
-            _capture?.DataAvailable -= OnDataAvailable;
-            _capture?.RecordingStopped -= OnRecordingStopped;
+            if (_capture != null)
+            {
+                _capture.DataAvailable -= OnDataAvailable;
+                _capture.RecordingStopped -= OnRecordingStopped;
+            }
             _capture?.StopRecording();
             _capture?.Dispose();
             _capture = null;

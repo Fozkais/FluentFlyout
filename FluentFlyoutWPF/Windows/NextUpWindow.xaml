@@ -1,4 +1,4 @@
-﻿<controls:MicaWindow x:Class="FluentFlyoutWPF.Windows.NextUpWindow"
+<controls:MicaWindow x:Class="FluentFlyoutWPF.Windows.NextUpWindow"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
@@ -38,7 +38,12 @@
         </EventTrigger>
     </Window.Triggers>
 
-    <Grid Margin="12,0,12,0" ColumnDefinitions="Auto, Auto, *">
+    <Grid Margin="12,0,12,0">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
             <ui:SymbolIcon Symbol="MusicNote120" Filled="True" Width="14" Height="14" FontSize="14" VerticalAlignment="Center" Margin="0,0,2,0"/>
             <TextBlock x:Name="UpNextTextBlock" Text="{DynamicResource NextUpWindow_UpNextText}" FontSize="12" VerticalAlignment="Center" FontWeight="Medium"/>

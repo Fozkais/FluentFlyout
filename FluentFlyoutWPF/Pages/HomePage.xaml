@@ -103,7 +103,17 @@
         </StackPanel>
 
         <TextBlock Grid.Row="6" Text="{DynamicResource HomeDashboardTitle}" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,6" />
-        <Grid Margin="-4" RowDefinitions="Auto, Auto, Auto, Auto" ColumnDefinitions="*, *">
+        <Grid Margin="-4">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
             <ui:CardAction Grid.Row="0" Grid.Column="0" Margin="4" Padding="12,20" IsChevronVisible="True" Click="MediaFlyout_Click">
                 <ui:CardAction.Icon>
                     <ui:SymbolIcon Symbol="VideoPlayPause24" FontSize="30" Filled="False" />
@@ -191,18 +201,18 @@
                 </StackPanel>
             </ui:CardAction>
 
-            <ui:CardAction Grid.Row="2" Grid.Column="1" Margin="4" Padding="12,20" IsChevronVisible="True" Click="LockKeys_Click">
+            <ui:CardAction Grid.Row="2" Grid.Column="1" Margin="4" Padding="12,20" IsChevronVisible="True" Click="QueueSettings_Click">
                 <ui:CardAction.Icon>
-                    <ui:SymbolIcon Symbol="LockMultiple24" FontSize="30" Filled="False" />
+                    <ui:SymbolIcon Symbol="List20" FontSize="30" Filled="False" />
                 </ui:CardAction.Icon>
                 <StackPanel>
-                    <ui:TextBlock FontWeight="Medium" Text="{DynamicResource LockKeysCustomizationTitle}" />
-                    <ui:TextBlock Appearance="Secondary" Text="{Binding LockKeysEnabled, Converter={StaticResource BoolToEnabledDisabledConverter}}">
+                    <ui:TextBlock FontWeight="Medium" Text="File d'attente Deezer" />
+                    <ui:TextBlock Appearance="Secondary" Text="{Binding DeezerQueueEnabled, Converter={StaticResource BoolToEnabledDisabledConverter}}">
                         <ui:TextBlock.Style>
                             <Style TargetType="ui:TextBlock">
                                 <Setter Property="Opacity" Value="1" />
                                 <Style.Triggers>
-                                    <DataTrigger Binding="{Binding LockKeysEnabled}" Value="False">
+                                    <DataTrigger Binding="{Binding DeezerQueueEnabled}" Value="False">
                                         <Setter Property="Opacity" Value="0.5" />
                                     </DataTrigger>
                                 </Style.Triggers>

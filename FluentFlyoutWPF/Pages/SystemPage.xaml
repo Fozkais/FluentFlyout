@@ -174,13 +174,26 @@
                 </StackPanel>
             </ui:CardControl>
 
-            <!-- update section -->
-            <TextBlock Text="{DynamicResource UpdatesSectionTitle}" FontSize="14" FontWeight="SemiBold" Margin="0,12,0,6" />
-            <ui:CardControl x:Name="ShowUpdateNotificationsTitleCard" Tag="Indexable" Margin="0,0,0,36" >
+            <ui:CardControl x:Name="ShowUpdateNotificationsTitleCard" Tag="Indexable" Margin="0,0,0,16" >
                 <ui:CardControl.Header>
                     <TextBlock Text="{DynamicResource ShowUpdateNotificationsTitle}" FontSize="14" FontWeight="Regular" VerticalAlignment="Center" />
                 </ui:CardControl.Header>
                 <controls:ToggleSwitch IsChecked="{Binding ShowUpdateNotifications, Mode=TwoWay}" />
+            </ui:CardControl>
+
+            <!-- deezer cdp status section -->
+            <TextBlock Text="Intégration Deezer Desktop (Direct CDP ⚡)" FontSize="14" FontWeight="SemiBold" Margin="0,12,0,6" />
+            <ui:CardControl x:Name="DeezerCdpTitleCard" Tag="Indexable" Icon="{ui:SymbolIcon List20}" Margin="0,0,0,24">
+                <ui:CardControl.Header>
+                    <StackPanel Orientation="Vertical">
+                        <TextBlock Text="Mode Direct CDP (Port 9222)" FontSize="14" FontWeight="Regular" VerticalAlignment="Center" />
+                        <TextBlock Text="Contrôle direct du lecteur Deezer via le port de débogage 9222 sans jeton ni compte API." FontSize="12" Opacity="0.5" />
+                    </StackPanel>
+                </ui:CardControl.Header>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <TextBlock Name="CdpStatusText" Text="Vérification CDP..." FontSize="12" VerticalAlignment="Center" Margin="0,0,16,0" FontWeight="Medium" />
+                    <ui:Button Name="TestCdpButton" Content="Vérifier / Lancer Deezer CDP" Click="TestCdpButton_Click" Appearance="Primary" />
+                </StackPanel>
             </ui:CardControl>
 
             <!-- app filtering -->

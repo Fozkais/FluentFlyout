@@ -156,6 +156,11 @@ public partial class HomePage : Page
         SettingsWindow.NavigateToPage(typeof(LockKeysPage));
     }
 
+    private void QueueSettings_Click(object sender, System.Windows.RoutedEventArgs e)
+    {
+        SettingsWindow.NavigateToPage(typeof(QueueSettingsPage));
+    }
+
     private void TaskbarVisualizer_Click(object sender, System.Windows.RoutedEventArgs e)
     {
         SettingsWindow.NavigateToPage(typeof(TaskbarVisualizerPage));

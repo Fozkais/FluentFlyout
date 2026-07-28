@@ -63,6 +63,18 @@ public partial class UserSettings : ObservableObject
     public partial bool PlayerInfoEnabled { get; set; }
 
     /// <summary>
+    /// Deezer access token for API authentication
+    /// </summary>
+    [ObservableProperty]
+    public partial string DeezerAccessToken { get; set; } = "be0b613cec11979515cfb0483c8702d1ca91bc7e0ea0ceb3b2028e6366e3d76a27174d2aec1cb3150df7f5f9d60b834156c9258f920314698d4d93a9f58f047f1a09a6af7a1bd775fba6c46b3a83c7335381b2d01cdb4e3cfe9f95a7cae7bd68";
+
+    /// <summary>
+    /// Deezer App ID for OAuth authentication
+    /// </summary>
+    [ObservableProperty]
+    public partial string DeezerAppId { get; set; } = "179891";
+
+    /// <summary>
     /// Enable repeat button
     /// </summary>
     [ObservableProperty]
@@ -156,6 +168,79 @@ public partial class UserSettings : ObservableObject
             OnPropertyChanged();
         }
     }
+
+    /// <summary>
+    /// Trigger 'Next Up' flyout before song ends
+    /// </summary>
+    [ObservableProperty]
+    public partial bool NextUpPreEndEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Seconds before song end to trigger 'Next Up'
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NextUpPreEndSecondsText))]
+    public partial int NextUpPreEndSeconds { get; set; } = 5;
+
+    [XmlIgnore]
+    public string NextUpPreEndSecondsText
+    {
+        get => NextUpPreEndSeconds.ToString();
+        set
+        {
+            if (int.TryParse(value, out var result))
+            {
+                NextUpPreEndSeconds = result switch
+                {
+                    > 30 => 30,
+                    < 1 => 1,
+                    _ => result
+                };
+            }
+            else
+            {
+                NextUpPreEndSeconds = 5;
+            }
+
+            OnPropertyChanged();
+        }
+    }
+
+    [ObservableProperty]
+    public partial bool DeezerQueueEnabled { get; set; } = true;
+
+    [ObservableProperty]
+    public partial bool QueueAutoCloseOnLeave { get; set; } = false;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(QueueAutoCloseDelayText))]
+    public partial int QueueAutoCloseDelay { get; set; } = 1500;
+
+    [XmlIgnore]
+    public string QueueAutoCloseDelayText
+    {
+        get => QueueAutoCloseDelay.ToString();
+        set
+        {
+            if (int.TryParse(value, out var result))
+            {
+                QueueAutoCloseDelay = result switch
+                {
+                    < 100 => 100,
+                    > 10000 => 10000,
+                    _ => result
+                };
+            }
+            else
+            {
+                QueueAutoCloseDelay = 1500;
+            }
+            OnPropertyChanged();
+        }
+    }
+
+    [ObservableProperty]
+    public partial bool QueueCloseOnTrackClick { get; set; } = false;
 
     /// <summary>
     /// Tray icon left-click behavior
@@ -703,6 +788,8 @@ public partial class UserSettings : ObservableObject
         Duration = 3000;
         NextUpEnabled = false;
         NextUpDuration = 2000;
+        NextUpPreEndEnabled = true;
+        NextUpPreEndSeconds = 5;
         NIconLeftClick = 0;
         CenterTitleArtist = false;
         FlyoutAnimationEasingStyle = 2;

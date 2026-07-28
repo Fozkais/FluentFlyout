@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2024-2026 The FluentFlyout Authors
+// Copyright (c) 2024-2026 The FluentFlyout Authors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 using FluentFlyout.Classes;
@@ -80,7 +80,7 @@ public static class MonitorUtil
         List<MonitorInfo> result = [];
 
         EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero,
-            (hMonitor, _, ref _, _) =>
+            (IntPtr hMonitor, IntPtr hdc, ref NativeMethods.RECT rect, IntPtr dwData) =>
             {
                 result.Add(GetMonitorInfoInternal(hMonitor));
                 return true;

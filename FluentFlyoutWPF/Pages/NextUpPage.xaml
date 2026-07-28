@@ -21,6 +21,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
             <StackPanel Orientation="Horizontal" Margin="0,0,0,24">
                 <Border CornerRadius="10" ClipToBounds="True" Width="164" Height="98">
@@ -30,7 +31,7 @@
                 </Border>
                 <TextBlock FontSize="14" FontWeight="Regular" HorizontalAlignment="Stretch" Opacity="0.75" Margin="12,0,0,0" MaxWidth="450" TextWrapping="WrapWithOverflow" Text="{DynamicResource NextUpDescription}" />
             </StackPanel>
-            <ui:CardControl x:Name="EnableNextUpTitleCard" Tag="Indexable" Grid.Row="1" Icon="{ui:SymbolIcon MusicNote2Play20}" Margin="0,0,0,24">
+            <ui:CardControl x:Name="EnableNextUpTitleCard" Tag="Indexable" Grid.Row="1" Icon="{ui:SymbolIcon MusicNote2Play20}" Margin="0,0,0,16">
                 <ui:CardControl.Header>
                     <StackPanel Orientation="Vertical">
                         <TextBlock Text="{DynamicResource EnableNextUpTitle}" FontSize="14" FontWeight="Regular" VerticalAlignment="Center" />
@@ -39,7 +40,22 @@
                 </ui:CardControl.Header>
                 <controls:ToggleSwitch Name="NextUpSwitch" IsChecked="{Binding NextUpEnabled, Mode=TwoWay}" />
             </ui:CardControl>
-            <ui:CardControl x:Name="NextUpStayDurationTitleCard" Tag="Indexable" Grid.Row="3" Icon="{ui:SymbolIcon Timer24}" Margin="0,0,0,76">
+
+            <ui:CardControl x:Name="PreEndTriggerTitleCard" Tag="Indexable" Grid.Row="2" Icon="{ui:SymbolIcon Clock20}" Margin="0,0,0,16">
+                <ui:CardControl.Header>
+                    <StackPanel Orientation="Vertical">
+                        <TextBlock Text="Affichage anticipé avant la fin du morceau" FontSize="14" FontWeight="Regular" VerticalAlignment="Center" />
+                        <TextBlock Text="Déclencher le volet 'À suivre' x secondes avant que la musique se termine" FontSize="12" Opacity="0.5" />
+                    </StackPanel>
+                </ui:CardControl.Header>
+                <StackPanel Orientation="Horizontal">
+                    <controls:ToggleSwitch Name="PreEndSwitch" IsChecked="{Binding NextUpPreEndEnabled, Mode=TwoWay}" Margin="0,0,12,0" />
+                    <ui:TextBox Name="NextUpPreEndSecondsTextBox" Width="50" ClearButtonEnabled="False" Text="{Binding NextUpPreEndSecondsText, Mode=TwoWay}" />
+                    <TextBlock Text="sec" FontSize="14" FontWeight="Regular" Margin="8,0,0,0" VerticalAlignment="Center" />
+                </StackPanel>
+            </ui:CardControl>
+
+            <ui:CardControl x:Name="NextUpStayDurationTitleCard" Tag="Indexable" Grid.Row="3" Icon="{ui:SymbolIcon Timer24}" Margin="0,0,0,16">
                 <ui:CardControl.Header>
                     <StackPanel Orientation="Vertical">
                         <TextBlock Text="{DynamicResource NextUpStayDurationTitle}" FontSize="14" FontWeight="Regular" VerticalAlignment="Center" />
@@ -51,6 +67,44 @@
                     <TextBlock Text="{DynamicResource MillisecondsUnit}" FontSize="14" FontWeight="Regular" Margin="10,0,0,0" VerticalAlignment="Center" />
                 </StackPanel>
             </ui:CardControl>
+
+            <TextBlock Text="File d'attente" FontSize="18" FontWeight="SemiBold" Margin="0,12,0,12" Grid.Row="4" />
+
+            <StackPanel Grid.Row="5" Margin="0,0,0,76">
+                <ui:CardControl Icon="{ui:SymbolIcon List20}" Margin="0,0,0,12">
+                    <ui:CardControl.Header>
+                        <StackPanel Orientation="Vertical">
+                            <TextBlock Text="Activer la file d'attente" FontSize="14" FontWeight="Regular" VerticalAlignment="Center" />
+                            <TextBlock Text="Affiche le bouton de file d'attente sur le widget de la barre des tâches" FontSize="12" Opacity="0.5" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <controls:ToggleSwitch IsChecked="{Binding DeezerQueueEnabled, Mode=TwoWay}" />
+                </ui:CardControl>
+
+                <ui:CardControl Icon="{ui:SymbolIcon Dismiss20}" Margin="0,0,0,12">
+                    <ui:CardControl.Header>
+                        <StackPanel Orientation="Vertical">
+                            <TextBlock Text="Fermer automatiquement lorsque la souris s'éloigne" FontSize="14" FontWeight="Regular" VerticalAlignment="Center" />
+                            <TextBlock Text="Ferme la fenêtre de file d'attente x millisecondes après le départ du curseur" FontSize="12" Opacity="0.5" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <controls:ToggleSwitch IsChecked="{Binding QueueAutoCloseOnLeave, Mode=TwoWay}" Margin="0,0,12,0" />
+                        <ui:TextBox Width="60" ClearButtonEnabled="False" Text="{Binding QueueAutoCloseDelayText, Mode=TwoWay}" />
+                        <TextBlock Text="ms" FontSize="14" FontWeight="Regular" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </ui:CardControl>
+
+                <ui:CardControl Icon="{ui:SymbolIcon Play20}" Margin="0,0,0,12">
+                    <ui:CardControl.Header>
+                        <StackPanel Orientation="Vertical">
+                            <TextBlock Text="Fermer la file d'attente lors du clic sur une musique" FontSize="14" FontWeight="Regular" VerticalAlignment="Center" />
+                            <TextBlock Text="Ferme automatiquement le volet de lecture dès qu'un titre est sélectionné" FontSize="12" Opacity="0.5" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <controls:ToggleSwitch IsChecked="{Binding QueueCloseOnTrackClick, Mode=TwoWay}" />
+                </ui:CardControl>
+            </StackPanel>
         </Grid>
     </StackPanel>
 </Page>

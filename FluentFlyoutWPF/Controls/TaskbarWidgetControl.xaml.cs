@@ -4,6 +4,8 @@
 using FluentFlyout.Classes.Settings;
 using FluentFlyout.Classes.Utils;
 using FluentFlyoutWPF;
+using FluentFlyoutWPF.Classes.Services;
+using FluentFlyoutWPF.Windows;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -75,6 +77,14 @@ public partial class TaskbarWidgetControl : UserControl
 
         // Initialize control order
         ReorderControls();
+
+        SettingsManager.Current.PropertyChanged += (s, e) =>
+        {
+            if (e.PropertyName == nameof(SettingsManager.Current.DeezerQueueEnabled))
+            {
+                _ = UpdateQueueButtonVisibilityAsync();
+            }
+        };
     }
 
     public void ReorderControls()
@@ -274,7 +284,7 @@ public partial class TaskbarWidgetControl : UserControl
         // add space for playback controls if enabled and visible
         if (SettingsManager.Current.TaskbarWidgetControlsEnabled && ControlsStackPanel.Visibility == Visibility.Visible)
         {
-            logicalWidth += 104;
+            logicalWidth += 138;
         }
 
         double logicalHeight = 40; // default height
@@ -572,7 +582,32 @@ public partial class TaskbarWidgetControl : UserControl
                 ? Visibility.Visible
                 : Visibility.Collapsed;
 
+            _ = UpdateQueueButtonVisibilityAsync();
+
             Visibility = Visibility.Visible;
+        });
+    }
+
+    private async Task UpdateQueueButtonVisibilityAsync()
+    {
+        if (!SettingsManager.Current.DeezerQueueEnabled)
+        {
+            Dispatcher.Invoke(() => QueueButton.Visibility = Visibility.Collapsed);
+            return;
+        }
+
+        var session = _mainWindow?.GetActiveMediaSession();
+        string appId = session?.ControlSession?.SourceAppUserModelId ?? "";
+        bool isDeezer = appId.Contains("deezer", StringComparison.OrdinalIgnoreCase);
+        bool isCdpAvailable = false;
+        if (isDeezer)
+        {
+            isCdpAvailable = await DeezerCdpService.IsCdpAvailableAsync();
+        }
+
+        Dispatcher.Invoke(() =>
+        {
+            QueueButton.Visibility = (isDeezer && isCdpAvailable) ? Visibility.Visible : Visibility.Collapsed;
         });
     }
 
@@ -649,5 +684,29 @@ public partial class TaskbarWidgetControl : UserControl
         if (focusedSession == null) return;
 
         await focusedSession.ControlSession.TrySkipNextAsync();
+    }
+
+    private static QueueWindow? _activeQueueWindow;
+
+    private void QueueButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_mainWindow == null) return;
+
+        // Toggle behavior: if queue is already open, close it with animation!
+        if (_activeQueueWindow != null && _activeQueueWindow.IsLoaded && _activeQueueWindow.IsVisible)
+        {
+            _activeQueueWindow.CloseWithAnimation();
+            _activeQueueWindow = null;
+            return;
+        }
+
+        var focusedSession = _mainWindow.GetActiveMediaSession();
+        var songInfo = focusedSession != null ? MainWindow.TryGetMediaProperties(focusedSession.ControlSession) : null;
+
+        var queueWin = new QueueWindow(songInfo?.Title ?? "", songInfo?.Artist ?? "");
+        _activeQueueWindow = queueWin;
+        queueWin.Closed += (s, args) => { if (_activeQueueWindow == queueWin) _activeQueueWindow = null; };
+
+        queueWin.ShowWithAnimation();
     }
 }

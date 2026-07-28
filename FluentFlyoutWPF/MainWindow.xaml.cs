@@ -23,6 +23,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Windows.ApplicationModel;
 using Windows.Media.Control;
@@ -63,6 +64,7 @@ public partial class MainWindow : MicaWindow
     static Mutex singleton = new Mutex(true, "FluentFlyout"); // to prevent multiple instances of the app
     private NextUpWindow? nextUpWindow = null; // to prevent multiple instances of NextUpWindow
     private string currentTitle = ""; // to prevent NextUpWindow from showing the same song
+    private bool _nextUpShownForCurrentTrack = false;
 
     private readonly int _seekbarUpdateInterval = 300;
     private readonly Timer _positionTimer;
@@ -325,7 +327,7 @@ public partial class MainWindow : MicaWindow
         }
     }
 
-    private static GlobalSystemMediaTransportControlsSessionMediaProperties? TryGetMediaProperties(GlobalSystemMediaTransportControlsSession controlSession)
+    public static GlobalSystemMediaTransportControlsSessionMediaProperties? TryGetMediaProperties(GlobalSystemMediaTransportControlsSession controlSession)
     {
         try
         {
@@ -712,42 +714,20 @@ public partial class MainWindow : MicaWindow
 
         pauseOtherMediaSessionsIfNeeded(mediaSession);
 
-        if (SettingsManager.Current.NextUpEnabled && !FullscreenDetector.IsFullscreenApplicationRunning()) // show NextUpWindow if enabled in settings
+        if (currentTitle != songInfo.Title)
         {
-            void createNewNextUpWindow()
-            {
-                Dispatcher.Invoke(() =>
-                {
-                    if (nextUpWindow == null && playbackInfo.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing) // double-check within the Dispatcher to prevent race conditions
-                    {
-                        nextUpWindow = new NextUpWindow(songInfo.Title, songInfo.Artist, thumbnail);
-                        currentTitle = songInfo.Title;
-                        nextUpWindow.Closed += (s, e) => nextUpWindow = null; // set nextUpWindow to null when closed
-                    }
-                });
-            }
+            _nextUpShownForCurrentTrack = false;
+            currentTitle = songInfo.Title;
 
-            if (nextUpWindow == null && IsVisible == false && songInfo.Thumbnail != null && currentTitle != songInfo.Title)
-            {
-                createNewNextUpWindow();
-            }
-            else if (nextUpWindow != null && !onlyThumbnailChanged)
+            if (nextUpWindow != null)
             {
                 Dispatcher.Invoke(() =>
                 {
                     if (nextUpWindow != null)
                     {
-                        WindowHelper.SetVisibility(nextUpWindow, false); // prevents rare flickering during rapid closing
-                        nextUpWindow.Close(); // must be cleared by the Closed event
+                        WindowHelper.SetVisibility(nextUpWindow, false);
+                        nextUpWindow.Close();
                     }
-                });
-                createNewNextUpWindow();
-            }
-            else if (nextUpWindow != null && songInfo.Thumbnail != null)
-            {
-                Dispatcher.Invoke(() =>
-                {
-                    nextUpWindow?.UpdateThumbnail(thumbnail);
                 });
             }
         }
@@ -779,6 +759,70 @@ public partial class MainWindow : MicaWindow
                 HandlePlayBackState(session.ControlSession.GetPlaybackInfo().PlaybackStatus);
             });
         }
+
+        if (SettingsManager.Current.NextUpEnabled && SettingsManager.Current.NextUpPreEndEnabled && !_nextUpShownForCurrentTrack && !FullscreenDetector.IsFullscreenApplicationRunning())
+        {
+            _ = CheckPreEndNextUpAsync(session);
+        }
+    }
+
+    private async Task CheckPreEndNextUpAsync(MediaSession session)
+    {
+        string appId = session.ControlSession?.SourceAppUserModelId ?? "";
+        bool isDeezer = appId.Contains("deezer", StringComparison.OrdinalIgnoreCase);
+
+        // If playing on Deezer but CDP is NOT active, disable NextUp flyout
+        if (isDeezer)
+        {
+            bool cdpActive = await DeezerCdpService.IsCdpAvailableAsync();
+            if (!cdpActive) return;
+        }
+
+        var timeline = session.ControlSession?.GetTimelineProperties();
+        if (timeline != null && timeline.EndTime > TimeSpan.Zero)
+        {
+            var now = DateTimeOffset.UtcNow;
+            var elapsedSinceUpdate = (now > timeline.LastUpdatedTime) ? (now - timeline.LastUpdatedTime) : TimeSpan.Zero;
+            var livePosition = timeline.Position + elapsedSinceUpdate;
+            var remaining = timeline.EndTime - livePosition;
+
+            int triggerSecs = SettingsManager.Current.NextUpPreEndSeconds;
+            if (remaining > TimeSpan.Zero && remaining <= TimeSpan.FromSeconds(triggerSecs))
+            {
+                _nextUpShownForCurrentTrack = true;
+                TriggerPreEndNextUpWindowAsync(session);
+            }
+        }
+    }
+
+    private async void TriggerPreEndNextUpWindowAsync(MediaSession session)
+    {
+        var songInfo = TryGetMediaProperties(session.ControlSession);
+        if (songInfo == null) return;
+
+        var nextTrack = await DeezerService.GetNextTrackAsync(songInfo.Title, songInfo.Artist);
+        string titleToShow = nextTrack?.Title ?? "Morceau suivant";
+        string artistToShow = nextTrack?.Artist ?? "";
+        BitmapImage? thumbnailToShow = null;
+
+        if (nextTrack != null && !string.IsNullOrEmpty(nextTrack.CoverUrl))
+        {
+            thumbnailToShow = await DeezerService.LoadCoverImageAsync(nextTrack.CoverUrl);
+        }
+
+        if (thumbnailToShow == null)
+        {
+            thumbnailToShow = BitmapHelper.GetThumbnail(songInfo.Thumbnail);
+        }
+
+        Dispatcher.Invoke(() =>
+        {
+            if (nextUpWindow == null)
+            {
+                nextUpWindow = new NextUpWindow(titleToShow, artistToShow, thumbnailToShow);
+                nextUpWindow.Closed += (s, e) => nextUpWindow = null;
+            }
+        });
     }
 
     private void MediaManager_OnAnySessionClosed(MediaSession mediaSession)

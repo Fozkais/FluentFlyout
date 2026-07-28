@@ -13,7 +13,7 @@ namespace FluentFlyout.Classes.Settings;
 public class SettingsManager
 {
     private static readonly NLog.Logger Logger = NLog.LogManager.GetCurrentClassLogger();
-    private static readonly Lock SettingsFileLock = new();
+    private static readonly object SettingsFileLock = new();
 
     private static string SettingsFilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),

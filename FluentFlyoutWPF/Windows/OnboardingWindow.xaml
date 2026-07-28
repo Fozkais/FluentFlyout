@@ -1,4 +1,4 @@
-﻿<controls:MicaWindow
+<controls:MicaWindow
     x:Class="FluentFlyoutWPF.OnboardingWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -42,7 +42,11 @@
                 <TextBlock Text="Get started" FontSize="28" FontWeight="SemiBold" VerticalAlignment="Center" />
             </StackPanel>
 
-            <Grid Grid.Row="1" ColumnDefinitions="1.2*,*" x:Name="ContentsGrid">
+            <Grid Grid.Row="1" x:Name="ContentsGrid">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="1.2*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
                 <Grid.RenderTransform>
                     <TranslateTransform X="0" Y="0" />
                 </Grid.RenderTransform>
@@ -219,7 +223,13 @@
                 </Border>
             </Grid>
 
-            <Grid Grid.Row="2" Margin="0,24,0,0" ColumnDefinitions="*,Auto,Auto,Auto">
+            <Grid Grid.Row="2" Margin="0,24,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
                 <TextBlock Text="{Binding StepProgressText}" VerticalAlignment="Center" Opacity="0.5" />
 
                 <!--<ui:Button Grid.Column="1" Appearance="Secondary" Content="Skip" Command="{Binding SkipCommand}" Padding="16,6" Margin="0,0,8,0" />-->

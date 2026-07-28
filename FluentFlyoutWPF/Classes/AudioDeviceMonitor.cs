@@ -97,7 +97,10 @@ public class AudioDeviceMonitor : IDisposable
 
     public void Dispose()
     {
-        _notificationClient?.DefaultDeviceChanged -= OnDefaultDeviceChanged;
+        if (_notificationClient != null)
+        {
+            _notificationClient.DefaultDeviceChanged -= OnDefaultDeviceChanged;
+        }
 
         if (_deviceEnumerator != null && _notificationClient != null)
         {

@@ -11,6 +11,8 @@ using System.Windows;
 using System.Windows.Controls;
 using MessageBox = Wpf.Ui.Controls.MessageBox;
 
+using FluentFlyoutWPF.Classes.Services;
+
 namespace FluentFlyoutWPF.Pages;
 
 public partial class SystemPage : Page
@@ -21,6 +23,37 @@ public partial class SystemPage : Page
         InitializeComponent();
         DataContext = SettingsManager.Current;
         UpdateMonitorList();
+        UpdateCdpStatusAsync();
+    }
+
+    private async void UpdateCdpStatusAsync()
+    {
+        if (CdpStatusText == null) return;
+
+        bool isAvailable = await DeezerCdpService.IsCdpAvailableAsync();
+        if (isAvailable)
+        {
+            CdpStatusText.Text = "Statut : Mode Direct CDP Actif ⚡ (Port 9222)";
+            CdpStatusText.Foreground = (System.Windows.Media.Brush)Application.Current.TryFindResource("MicaWPF.Brushes.SystemAccentColorPrimary") ?? System.Windows.Media.Brushes.Green;
+        }
+        else
+        {
+            CdpStatusText.Text = "Statut : Deezer inactif ou sans port debug";
+            CdpStatusText.Foreground = System.Windows.Media.Brushes.Gray;
+        }
+    }
+
+    private async void TestCdpButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (TestCdpButton == null) return;
+        TestCdpButton.IsEnabled = false;
+        CdpStatusText.Text = "Vérification / Lancement de Deezer...";
+
+        await DeezerCdpService.EnsureDeezerRunningWithDebugPortAsync();
+        await Task.Delay(1000);
+
+        UpdateCdpStatusAsync();
+        TestCdpButton.IsEnabled = true;
     }
 
     private void StartupSwitch_Click(object sender, RoutedEventArgs e)
