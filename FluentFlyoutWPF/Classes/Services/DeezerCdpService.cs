@@ -106,6 +106,69 @@ public static class DeezerCdpService
         }
     }
 
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    /// <summary>
+    /// Explicitly launches (or restarts if running without debug port) Deezer Desktop with --remote-debugging-port=9222.
+    /// </summary>
+    public static async Task LaunchDeezerWithDebugPortAsync(bool forceRestartIfNoCdp = true)
+    {
+        if (await IsCdpAvailableAsync())
+        {
+            // Already running with CDP: bring window to front
+            try
+            {
+                var procs = Process.GetProcessesByName("Deezer");
+                if (procs.Length > 0 && procs[0].MainWindowHandle != IntPtr.Zero)
+                {
+                    SetForegroundWindow(procs[0].MainWindowHandle);
+                }
+            }
+            catch {}
+            return;
+        }
+
+        try
+        {
+            var processes = Process.GetProcessesByName("Deezer");
+            if (processes.Length > 0 && forceRestartIfNoCdp)
+            {
+                foreach (var p in processes)
+                {
+                    try { p.Kill(); } catch {}
+                }
+                await Task.Delay(500);
+            }
+
+            string exePath = GetDeezerExePath();
+            if (!File.Exists(exePath))
+            {
+                Logger.Warn($"Deezer executable not found at {exePath}");
+                return;
+            }
+
+            var psi = new ProcessStartInfo
+            {
+                FileName = exePath,
+                Arguments = $"--remote-debugging-port={DebugPort}",
+                UseShellExecute = true
+            };
+            Process.Start(psi);
+
+            for (int i = 0; i < 15; i++)
+            {
+                await Task.Delay(200);
+                if (await IsCdpAvailableAsync())
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Failed to launch Deezer with remote debugging port");
+        }
+    }
+
     private static ClientWebSocket? _persistentWs;
     private static readonly SemaphoreSlim _wsLock = new SemaphoreSlim(1, 1);
     private static int _nextMessageId = 1;

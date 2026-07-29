@@ -217,6 +217,17 @@ public partial class TaskbarWidgetControl : UserControl
     {
         if (_mainWindow == null) return;
 
+        // If no media is playing (fallback music note is displayed) and Deezer Integration is enabled:
+        // Launch (or restart with CDP) Deezer Desktop!
+        if (string.IsNullOrEmpty(_actualTitle) && string.IsNullOrEmpty(_actualArtist))
+        {
+            if (SettingsManager.Current.DeezerQueueEnabled)
+            {
+                _ = DeezerCdpService.LaunchDeezerWithDebugPortAsync(forceRestartIfNoCdp: true);
+                return;
+            }
+        }
+
         // toggle main flyout when clicked
         _mainWindow.ShowMediaFlyout(toggleMode: true, forceShow: true);
     }
@@ -470,6 +481,15 @@ public partial class TaskbarWidgetControl : UserControl
                 SongImage.ImageSource = null;
                 BackgroundImage.Source = null;
                 SongImageBorder.Margin = new Thickness(0, 0, 0, -3); // align music note better when no cover
+
+                if (SettingsManager.Current.DeezerQueueEnabled)
+                {
+                    SongImageBorder.ToolTip = "Lancer Deezer (Mode CDP)";
+                }
+                else
+                {
+                    SongImageBorder.ToolTip = null;
+                }
 
                 MainBorder.Background = new SolidColorBrush(Colors.Transparent);
                 MainBorder.Background.Opacity = 0;
