@@ -1073,11 +1073,15 @@ public partial class MainWindow : MicaWindow
                 ControlBack.IsEnabled = ControlForward.IsEnabled = mediaProperties.Controls.IsNextEnabled;
                 ControlBack.Opacity = ControlForward.Opacity = mediaProperties.Controls.IsNextEnabled ? 1 : 0.35;
 
+                string appId = controlSession?.SourceAppUserModelId ?? "";
+                bool isDeezer = appId.Contains("deezer", StringComparison.OrdinalIgnoreCase);
+
                 if (SettingsManager.Current.RepeatEnabled && !SettingsManager.Current.CompactLayout)
                 {
                     ControlRepeat.Visibility = Visibility.Visible;
-                    ControlRepeat.IsEnabled = mediaProperties.Controls.IsRepeatEnabled;
-                    ControlRepeat.Opacity = mediaProperties.Controls.IsRepeatEnabled ? 1 : 0.35;
+                    bool canRepeat = isDeezer || mediaProperties.Controls.IsRepeatEnabled;
+                    ControlRepeat.IsEnabled = canRepeat;
+                    ControlRepeat.Opacity = canRepeat ? 1 : 0.35;
                     if (mediaProperties.AutoRepeatMode == global::Windows.Media.MediaPlaybackAutoRepeatMode.List)
                     {
                         SymbolRepeat.Symbol = Wpf.Ui.Controls.SymbolRegular.ArrowRepeatAll24;
@@ -1100,8 +1104,9 @@ public partial class MainWindow : MicaWindow
                 if (SettingsManager.Current.ShuffleEnabled && !SettingsManager.Current.CompactLayout)
                 {
                     ControlShuffle.Visibility = Visibility.Visible;
-                    ControlShuffle.IsEnabled = mediaProperties.Controls.IsShuffleEnabled;
-                    ControlShuffle.Opacity = mediaProperties.Controls.IsShuffleEnabled ? 1 : 0.35;
+                    bool canShuffle = isDeezer || mediaProperties.Controls.IsShuffleEnabled;
+                    ControlShuffle.IsEnabled = canShuffle;
+                    ControlShuffle.Opacity = canShuffle ? 1 : 0.35;
                     if (mediaProperties.IsShuffleActive == true)
                     {
                         SymbolShuffle.Symbol = Wpf.Ui.Controls.SymbolRegular.ArrowShuffle24;
@@ -1114,6 +1119,11 @@ public partial class MainWindow : MicaWindow
                     }
                 }
                 else ControlShuffle.Visibility = Visibility.Collapsed;
+
+                if (isDeezer)
+                {
+                    SyncDeezerRepeatShuffleStateAsync();
+                }
 
 
                 if (SettingsManager.Current.PlayerInfoEnabled && !SettingsManager.Current.CompactLayout)
@@ -1411,6 +1421,17 @@ public partial class MainWindow : MicaWindow
                 SymbolShuffle.Opacity = 0.5;
             }
         });
+    }
+
+    private async void SyncDeezerRepeatShuffleStateAsync()
+    {
+        if (await DeezerCdpService.IsCdpAvailableAsync())
+        {
+            int mode = await DeezerCdpService.GetRepeatStateAsync();
+            UpdateRepeatUi(mode);
+            bool shuffle = await DeezerCdpService.GetShuffleStateAsync();
+            UpdateShuffleUi(shuffle);
+        }
     }
 
     private void Seekbar_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)

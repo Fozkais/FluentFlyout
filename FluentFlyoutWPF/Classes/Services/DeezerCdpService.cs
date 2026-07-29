@@ -502,29 +502,128 @@ public static class DeezerCdpService
         return 0;
     }
 
+    private static readonly HttpClient _httpClient = new HttpClient();
+
     // Playlist Selector CDP API
     public static async Task<List<DeezerPlaylist>> GetUserPlaylistsAsync()
     {
-        string js = @"(function() {
+        var list = new List<DeezerPlaylist>();
+
+        string js = @"(async function() {
             try {
-                if (window.dzPlayer && window.dzPlayer.getUserData) {
+                if (!window.dzPlayer) return '[]';
+
+                // Method 1: dzPlayer cached playlists
+                if (typeof window.dzPlayer.getUserData === 'function') {
                     const data = window.dzPlayer.getUserData();
-                    const playlists = data.PLAYLISTS || data.playlists || [];
-                    return JSON.stringify(playlists.map(p => ({
-                        id: p.PLAYLIST_ID || p.id || 0,
-                        title: p.TITLE || p.title || 'Playlist',
-                        picture: p.PICTURE_PATH || p.picture || p.cover || '',
-                        tracks: p.NB_SONGS || p.nb_tracks || p.tracks || 0
-                    })));
+                    if (data) {
+                        const playlists = data.PLAYLISTS || data.playlists || (data.USER && data.USER.PLAYLISTS) || [];
+                        if (Array.isArray(playlists) && playlists.length > 0) {
+                            return JSON.stringify(playlists.map(p => ({
+                                id: p.PLAYLIST_ID || p.id || 0,
+                                title: p.TITLE || p.title || 'Playlist',
+                                picture: p.PICTURE_PATH || p.picture || p.cover || '',
+                                tracks: p.NB_SONGS || p.nb_tracks || p.tracks || 0
+                            })));
+                        }
+                    }
+                }
+
+                // Method 2: Fetch via Deezer API inside page context
+                let userId = null;
+                if (typeof window.dzPlayer.getUserId === 'function') {
+                    userId = window.dzPlayer.getUserId();
+                }
+                if (!userId && typeof window.dzPlayer.getUserData === 'function') {
+                    const data = window.dzPlayer.getUserData();
+                    if (data) userId = data.USER_ID || (data.USER && (data.USER.USER_ID || data.USER.ID));
+                }
+
+                if (userId) {
+                    const resp = await fetch('https://api.deezer.com/user/' + userId + '/playlists?limit=50');
+                    if (resp.ok) {
+                        const resJson = await resp.json();
+                        if (resJson && resJson.data && Array.isArray(resJson.data) && resJson.data.length > 0) {
+                            return JSON.stringify(resJson.data.map(p => ({
+                                id: p.id,
+                                title: p.title,
+                                picture: p.picture_medium || p.picture || p.cover || '',
+                                tracks: p.nb_tracks || 0
+                            })));
+                        }
+                    }
                 }
             } catch(e) {}
             return '[]';
         })()";
 
         string? json = await EvaluateJsAndReturnStringAsync(js);
-        var list = new List<DeezerPlaylist>();
-        if (string.IsNullOrEmpty(json) || json == "[]") return list;
+        if (!string.IsNullOrEmpty(json) && json != "[]")
+        {
+            list = ParsePlaylistsJson(json);
+        }
 
+        // Failsafe Method 3: If list is still empty, get userId and fetch directly via C# HttpClient
+        if (list.Count == 0)
+        {
+            try
+            {
+                string getUserIdJs = @"(function() {
+                    try {
+                        if (window.dzPlayer) {
+                            if (typeof window.dzPlayer.getUserId === 'function') return String(window.dzPlayer.getUserId());
+                            if (window.dzPlayer.getUserData) {
+                                const ud = window.dzPlayer.getUserData();
+                                return String(ud.USER_ID || (ud.USER && (ud.USER.USER_ID || ud.USER.ID)) || '');
+                            }
+                        }
+                    } catch(e) {}
+                    return '';
+                })()";
+
+                string? userId = await EvaluateJsAndReturnStringAsync(getUserIdJs);
+                userId = userId?.Trim('"', ' ', '\r', '\n');
+
+                if (!string.IsNullOrEmpty(userId) && userId != "0" && userId != "null")
+                {
+                    string apiUrl = $"https://api.deezer.com/user/{userId}/playlists?limit=50";
+                    string apiResponse = await _httpClient.GetStringAsync(apiUrl);
+                    using var doc = JsonDocument.Parse(apiResponse);
+                    if (doc.RootElement.TryGetProperty("data", out var dataArr) && dataArr.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var item in dataArr.EnumerateArray())
+                        {
+                            long id = item.TryGetProperty("id", out var idProp) ? idProp.GetInt64() : 0;
+                            string title = item.TryGetProperty("title", out var titleProp) ? titleProp.GetString() ?? "" : "";
+                            string pic = item.TryGetProperty("picture_medium", out var picProp) ? picProp.GetString() ?? "" : "";
+                            int count = item.TryGetProperty("nb_tracks", out var countProp) ? countProp.GetInt32() : 0;
+
+                            if (id > 0)
+                            {
+                                list.Add(new DeezerPlaylist
+                                {
+                                    Id = id,
+                                    Title = title,
+                                    CoverUrl = string.IsNullOrEmpty(pic) ? "https://e-cdns-images.dzcdn.net/images/cover/250x250-000000-80-0-0.jpg" : pic,
+                                    TrackCount = count
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "Error fetching user playlists via C# HttpClient fallback");
+            }
+        }
+
+        return list;
+    }
+
+    private static List<DeezerPlaylist> ParsePlaylistsJson(string json)
+    {
+        var list = new List<DeezerPlaylist>();
         try
         {
             using var doc = JsonDocument.Parse(json);
@@ -555,7 +654,6 @@ public static class DeezerCdpService
         {
             Logger.Error(ex, "Error parsing user playlists JSON from CDP");
         }
-
         return list;
     }
 
