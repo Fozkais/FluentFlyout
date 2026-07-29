@@ -628,6 +628,33 @@ public static class DeezerCdpService
 
     public static async Task<bool> PlayPlaylistAsync(long playlistId)
     {
+        // 1. Direct SPA hash navigation and DOM play button click (100% reliable on Deezer Desktop UI)
+        string navJs = $@"(async function() {{
+            try {{
+                window.location.hash = '#/fr/playlist/{playlistId}';
+                window.dispatchEvent(new HashChangeEvent('hashchange'));
+                await new Promise(r => setTimeout(r, 600));
+                const btns = Array.from(document.querySelectorAll('button'));
+                const playBtn = btns.find(b => {{
+                    const aria = (b.getAttribute('aria-label') || '').toLowerCase();
+                    return (aria.includes('couter') || aria === 'play' || aria.startsWith('play ')) &&
+                           !aria.includes('playlist') &&
+                           !aria.includes('paroles') &&
+                           !aria.includes('créer') &&
+                           !aria.includes('create');
+                }});
+                if (playBtn) {{
+                    playBtn.click();
+                    return 'played';
+                }}
+            }} catch(e) {{}}
+            return 'error';
+        }})()";
+
+        string? navRes = await EvaluateJsAndReturnStringAsync(navJs);
+        if (navRes != null && navRes.Contains("played")) return true;
+
+        // 2. Failsafe via C# HttpClient track fetch + dzPlayer.play
         try
         {
             string apiUrl = $"https://api.deezer.com/playlist/{playlistId}/tracks?limit=200";
@@ -667,16 +694,7 @@ public static class DeezerCdpService
             Logger.Error(ex, $"Error fetching playlist {playlistId} tracks via HttpClient");
         }
 
-        string fallbackJs = $@"(function() {{
-            try {{
-                if (window.dzPlayer && typeof window.dzPlayer.play === 'function') {{
-                    window.dzPlayer.play({{ type: 'playlist', id: '{playlistId}' }});
-                    return true;
-                }}
-            }} catch(e) {{}}
-            return false;
-        }})()";
-        return await ExecuteJsAsync(fallbackJs);
+        return false;
     }
 
     /// <summary>
