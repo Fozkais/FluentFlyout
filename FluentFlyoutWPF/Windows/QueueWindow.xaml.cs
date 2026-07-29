@@ -346,13 +346,12 @@ public partial class QueueWindow : MicaWindow
             var trackItem = _draggedTrackItem;
             bool wasDragging = _isDraggingItem;
 
+            double finalDeltaY = transform?.Y ?? 0;
+
             ResetDragState();
 
-            if (wasDragging && trackItem != null && transform != null)
+            if (wasDragging && trackItem != null)
             {
-                double finalDeltaY = transform.Y;
-                transform.Y = 0; // Reset transform
-
                 int fromIndex = _fullQueue.IndexOf(trackItem);
                 int shiftIndices = (int)Math.Round(finalDeltaY / 44.0); // 44px item row height
                 int toIndex = Math.Clamp(fromIndex + shiftIndices, 0, _fullQueue.Count - 1);
