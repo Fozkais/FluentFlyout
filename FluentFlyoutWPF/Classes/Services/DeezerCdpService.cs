@@ -61,6 +61,13 @@ public static class DeezerCdpService
         }
     }
 
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    private const int SW_MINIMIZE = 6;
+
     public static async Task EnsureDeezerRunningWithDebugPortAsync()
     {
         if (await IsCdpAvailableAsync())
@@ -94,21 +101,34 @@ public static class DeezerCdpService
             Process.Start(psi);
 
             // Wait up to 3 seconds for CDP port to open
-            for (int i = 0; i < 15; i++)
+            for (int i = 0; i < 20; i++)
             {
                 await Task.Delay(200);
                 if (await IsCdpAvailableAsync())
+                {
+                    try
+                    {
+                        var procs = Process.GetProcessesByName("Deezer");
+                        foreach (var p in procs)
+                        {
+                            if (p.MainWindowHandle != IntPtr.Zero)
+                            {
+                                ShowWindow(p.MainWindowHandle, SW_MINIMIZE);
+                            }
+                        }
+                    }
+                    catch {}
                     break;
+                }
             }
+
+            MainWindow.ActiveInstance?.ForceRefreshTaskbarWidget();
         }
         catch (Exception ex)
         {
             Logger.Error(ex, "Failed to launch Deezer with remote debugging port");
         }
     }
-
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    private static extern bool SetForegroundWindow(IntPtr hWnd);
 
     /// <summary>
     /// Explicitly launches (or restarts if running without debug port) Deezer Desktop with --remote-debugging-port=9222.
@@ -117,6 +137,7 @@ public static class DeezerCdpService
     {
         if (await IsCdpAvailableAsync())
         {
+            MainWindow.ActiveInstance?.ForceRefreshTaskbarWidget();
             return;
         }
 
@@ -148,12 +169,28 @@ public static class DeezerCdpService
             };
             Process.Start(psi);
 
-            for (int i = 0; i < 15; i++)
+            for (int i = 0; i < 20; i++)
             {
                 await Task.Delay(200);
                 if (await IsCdpAvailableAsync())
+                {
+                    try
+                    {
+                        var procs = Process.GetProcessesByName("Deezer");
+                        foreach (var p in procs)
+                        {
+                            if (p.MainWindowHandle != IntPtr.Zero)
+                            {
+                                ShowWindow(p.MainWindowHandle, SW_MINIMIZE);
+                            }
+                        }
+                    }
+                    catch {}
                     break;
+                }
             }
+
+            MainWindow.ActiveInstance?.ForceRefreshTaskbarWidget();
         }
         catch (Exception ex)
         {

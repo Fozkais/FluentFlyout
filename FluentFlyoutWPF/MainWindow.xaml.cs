@@ -80,9 +80,11 @@ public partial class MainWindow : MicaWindow
     private VolumeMixerWindow? volumeMixerWindow;
 
     internal static volatile bool ExplorerRestarting = false;
+    public static MainWindow? ActiveInstance;
 
     public MainWindow()
     {
+        ActiveInstance = this;
         DataContext = SettingsManager.Current;
         WindowHelper.SetNoActivate(this); // prevents some fullscreen apps from minimizing
         InitializeComponent();
@@ -648,49 +650,73 @@ public partial class MainWindow : MicaWindow
 #endif     
         pauseOtherMediaSessionsIfNeeded(mediaSession);
 
-        var focusedSession = GetActiveMediaSession();
-        var tbSongInfo = focusedSession != null ? TryGetMediaProperties(focusedSession.ControlSession) : null;
+        ForceRefreshTaskbarWidget();
 
-        if (tbSongInfo != null && !string.IsNullOrEmpty(tbSongInfo.Title))
+        if (IsVisible)
         {
-            var tbThumbnail = BitmapHelper.GetThumbnail(tbSongInfo.Thumbnail);
-            BitmapHelper.GetDominantColors(1);
-            var tbPlayback = focusedSession?.ControlSession?.GetPlaybackInfo();
-
-            taskbarWindow?.UpdateUi(tbSongInfo.Title, tbSongInfo.Artist, tbThumbnail, tbPlayback?.PlaybackStatus, tbPlayback?.Controls);
+            var focusedSession = GetActiveMediaSession();
+            UpdateUI(focusedSession);
+            HandlePlayBackState(playbackInfo?.PlaybackStatus);
         }
-        else if (SettingsManager.Current.DeezerQueueEnabled && DeezerCdpService.IsCdpAvailableSync)
+    }
+
+    public void ForceRefreshTaskbarWidget()
+    {
+        Dispatcher.Invoke(async () =>
         {
             try
             {
-                var cdpSong = DeezerCdpService.GetCurrentSongAsync().GetAwaiter().GetResult();
-                if (cdpSong != null && !string.IsNullOrEmpty(cdpSong.Title))
+                var focusedSession = GetActiveMediaSession();
+                var tbSongInfo = focusedSession != null ? TryGetMediaProperties(focusedSession.ControlSession) : null;
+
+                if (tbSongInfo != null && !string.IsNullOrEmpty(tbSongInfo.Title))
                 {
-                    var playbackStatus = cdpSong.IsPlaying 
-                        ? GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing 
-                        : GlobalSystemMediaTransportControlsSessionPlaybackStatus.Paused;
-                    taskbarWindow?.UpdateUi(cdpSong.Title, cdpSong.Artist, null, playbackStatus);
+                    var tbThumbnail = BitmapHelper.GetThumbnail(tbSongInfo.Thumbnail);
+                    BitmapHelper.GetDominantColors(1);
+                    var tbPlayback = focusedSession?.ControlSession?.GetPlaybackInfo();
+
+                    taskbarWindow?.UpdateUi(tbSongInfo.Title, tbSongInfo.Artist, tbThumbnail, tbPlayback?.PlaybackStatus, tbPlayback?.Controls);
+                }
+                else if (SettingsManager.Current.DeezerQueueEnabled && await DeezerCdpService.IsCdpAvailableAsync())
+                {
+                    var cdpSong = await DeezerCdpService.GetCurrentSongAsync();
+                    if (cdpSong != null && !string.IsNullOrEmpty(cdpSong.Title))
+                    {
+                        BitmapImage? cdpCover = null;
+                        if (!string.IsNullOrEmpty(cdpSong.CoverUrl))
+                        {
+                            try
+                            {
+                                cdpCover = new BitmapImage();
+                                cdpCover.BeginInit();
+                                cdpCover.UriSource = new Uri(cdpSong.CoverUrl);
+                                cdpCover.CacheOption = BitmapCacheOption.OnLoad;
+                                cdpCover.EndInit();
+                                cdpCover.Freeze();
+                            }
+                            catch {}
+                        }
+
+                        var playbackStatus = cdpSong.IsPlaying 
+                            ? GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing 
+                            : GlobalSystemMediaTransportControlsSessionPlaybackStatus.Paused;
+                        taskbarWindow?.UpdateUi(cdpSong.Title, cdpSong.Artist, cdpCover, playbackStatus);
+                    }
+                    else
+                    {
+                        taskbarWindow?.UpdateUi("-", "-", null, GlobalSystemMediaTransportControlsSessionPlaybackStatus.Closed);
+                    }
                 }
                 else
                 {
                     taskbarWindow?.UpdateUi("-", "-", null, GlobalSystemMediaTransportControlsSessionPlaybackStatus.Closed);
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                taskbarWindow?.UpdateUi("-", "-", null, GlobalSystemMediaTransportControlsSessionPlaybackStatus.Closed);
+                Logger.Error(ex, "Error in ForceRefreshTaskbarWidget");
             }
-        }
-        else
-        {
-            taskbarWindow?.UpdateUi("-", "-", null, GlobalSystemMediaTransportControlsSessionPlaybackStatus.Closed);
-        }
-
-        if (IsVisible)
-        {
-            UpdateUI(focusedSession);
-            HandlePlayBackState(playbackInfo?.PlaybackStatus);
-        }
+        });
     }
 
     // for determining whether MediaPropertyChanged has no changes
