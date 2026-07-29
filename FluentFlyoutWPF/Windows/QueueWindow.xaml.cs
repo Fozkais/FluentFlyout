@@ -310,100 +310,90 @@ public partial class QueueWindow : MicaWindow
         }
     }
 
-    // Drag & Drop Reordering with Visual Ghost Card
-    private DeezerTrack? _draggedTrack;
+    // Pure Vertical Card Drag-to-Reorder inside Queue ListView
+    private bool _isDraggingItem = false;
+    private Border? _draggedBorder;
+    private System.Windows.Media.TranslateTransform? _draggedTransform;
+    private Point _dragStartPointInList;
+    private DeezerTrack? _draggedTrackItem;
 
     private void QueueItem_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (sender is FrameworkElement fe && fe.DataContext is DeezerTrack track)
+        if (sender is Border border && border.DataContext is DeezerTrack track)
         {
-            _dragStartPoint = e.GetPosition(null);
-            _draggedTrack = track;
+            _dragStartPointInList = e.GetPosition(QueueListView);
+            _draggedBorder = border;
+            _draggedTrackItem = track;
+            _draggedTransform = border.RenderTransform as System.Windows.Media.TranslateTransform;
+            _isDraggingItem = false;
         }
     }
 
-    private void QueueItem_MouseMove(object sender, MouseEventArgs e)
+    private void QueueItem_PreviewMouseMove(object sender, MouseEventArgs e)
     {
-        if (e.LeftButton != MouseButtonState.Pressed || _draggedTrack == null) return;
+        if (e.LeftButton != MouseButtonState.Pressed || _draggedBorder == null || _draggedTrackItem == null) return;
 
-        Vector diff = _dragStartPoint - e.GetPosition(null);
-        if (Math.Abs(diff.X) > SystemParameters.MinimumHorizontalDragDistance ||
-            Math.Abs(diff.Y) > SystemParameters.MinimumVerticalDragDistance)
+        Point currentPos = e.GetPosition(QueueListView);
+        double deltaY = currentPos.Y - _dragStartPointInList.Y;
+
+        if (!_isDraggingItem && Math.Abs(deltaY) > 5)
         {
-            // Populate floating drag ghost card
-            if (!string.IsNullOrEmpty(_draggedTrack.CoverUrl))
+            _isDraggingItem = true;
+            _draggedBorder.CaptureMouse();
+            Panel.SetZIndex(_draggedBorder, 100);
+            _draggedBorder.Opacity = 0.85;
+        }
+
+        if (_isDraggingItem && _draggedTransform != null)
+        {
+            // Pure vertical translation: X is locked to 0!
+            _draggedTransform.Y = deltaY;
+        }
+    }
+
+    private async void QueueItem_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_draggedBorder != null)
+        {
+            if (_draggedBorder.IsMouseCaptured)
             {
-                try { DragGhostCover.Source = new System.Windows.Media.Imaging.BitmapImage(new Uri(_draggedTrack.CoverUrl)); } catch { }
+                _draggedBorder.ReleaseMouseCapture();
             }
-            DragGhostTitle.Text = _draggedTrack.Title;
-            DragGhostArtist.Text = _draggedTrack.Artist;
+            _draggedBorder.Opacity = 1.0;
+            Panel.SetZIndex(_draggedBorder, 0);
 
-            Point mousePos = e.GetPosition(this);
-            Point screenPos = PointToScreen(mousePos);
-            DragGhostPopup.HorizontalOffset = screenPos.X + 12;
-            DragGhostPopup.VerticalOffset = screenPos.Y + 12;
-            DragGhostPopup.IsOpen = true;
-
-            var dataObj = new DataObject("DeezerTrack", _draggedTrack);
-            DragDrop.DoDragDrop((DependencyObject)sender, dataObj, DragDropEffects.Move);
-
-            // Hide ghost after drag ends
-            DragGhostPopup.IsOpen = false;
-            _draggedTrack = null;
-        }
-    }
-
-    private void QueueListView_DragOver(object sender, DragEventArgs e)
-    {
-        if (e.Data.GetDataPresent("DeezerTrack"))
-        {
-            e.Effects = DragDropEffects.Move;
-            e.Handled = true;
-
-            // Move visual floating ghost card with mouse
-            Point mousePos = e.GetPosition(this);
-            Point screenPos = PointToScreen(mousePos);
-            DragGhostPopup.HorizontalOffset = screenPos.X + 12;
-            DragGhostPopup.VerticalOffset = screenPos.Y + 12;
-        }
-        else
-        {
-            e.Effects = DragDropEffects.None;
-        }
-    }
-
-    private async void QueueListView_Drop(object sender, DragEventArgs e)
-    {
-        DragGhostPopup.IsOpen = false;
-        if (!e.Data.GetDataPresent("DeezerTrack")) return;
-
-        var droppedTrack = e.Data.GetData("DeezerTrack") as DeezerTrack;
-        if (droppedTrack == null) return;
-
-        var targetItem = FindAncestor<ListViewItem>((DependencyObject)e.OriginalSource);
-        if (targetItem == null || targetItem.DataContext is not DeezerTrack targetTrack) return;
-
-        if (droppedTrack == targetTrack) return;
-
-        int fromIndex = _fullQueue.IndexOf(droppedTrack);
-        int toIndex = _fullQueue.IndexOf(targetTrack);
-
-        if (fromIndex >= 0 && toIndex >= 0)
-        {
-            // 1. Instant 0ms visual reorder in WPF UI
-            _fullQueue.RemoveAt(fromIndex);
-            _fullQueue.Insert(toIndex, droppedTrack);
-
-            for (int i = 0; i < _fullQueue.Count; i++)
+            if (_isDraggingItem && _draggedTrackItem != null && _draggedTransform != null)
             {
-                _fullQueue[i].TargetIndex = i;
+                double finalDeltaY = _draggedTransform.Y;
+                _draggedTransform.Y = 0; // Reset transform
+
+                int fromIndex = _fullQueue.IndexOf(_draggedTrackItem);
+                int shiftIndices = (int)Math.Round(finalDeltaY / 44.0); // 44px item row height
+                int toIndex = Math.Clamp(fromIndex + shiftIndices, 0, _fullQueue.Count - 1);
+
+                if (fromIndex >= 0 && toIndex >= 0 && fromIndex != toIndex)
+                {
+                    // 1. Instant 0ms visual reorder in WPF UI
+                    _fullQueue.RemoveAt(fromIndex);
+                    _fullQueue.Insert(toIndex, _draggedTrackItem);
+
+                    for (int i = 0; i < _fullQueue.Count; i++)
+                    {
+                        _fullQueue[i].TargetIndex = i;
+                    }
+
+                    ApplyFilter();
+                    DeezerService.UpdateCache(_fullQueue);
+
+                    // 2. Perform CDP reorder asynchronously in background
+                    await DeezerCdpService.MoveTrackAsync(fromIndex, toIndex);
+                }
             }
 
-            ApplyFilter();
-            DeezerService.UpdateCache(_fullQueue);
-
-            // 2. Perform CDP reorder asynchronously in background
-            await DeezerCdpService.MoveTrackAsync(fromIndex, toIndex);
+            _isDraggingItem = false;
+            _draggedBorder = null;
+            _draggedTransform = null;
+            _draggedTrackItem = null;
         }
     }
 
