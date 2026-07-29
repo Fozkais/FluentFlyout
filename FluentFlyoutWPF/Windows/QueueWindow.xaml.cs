@@ -70,22 +70,29 @@ public partial class QueueWindow : MicaWindow
         };
         _queueWatcherTimer.Tick += async (s, e) =>
         {
-            var activeSession = _mainWindow.GetActiveMediaSession();
-            string appId = activeSession?.ControlSession?.SourceAppUserModelId ?? "";
-            if (appId.Contains("deezer", StringComparison.OrdinalIgnoreCase) ||
-                (!string.IsNullOrEmpty(_contextSource) && _contextSource.Contains("deezer", StringComparison.OrdinalIgnoreCase)))
+            try
             {
-                string sig = await DeezerCdpService.GetQueueSignatureAsync();
-                if (!string.IsNullOrEmpty(sig) && !string.IsNullOrEmpty(_lastQueueSignature) && sig != _lastQueueSignature)
+                var activeSession = _mainWindow.GetActiveMediaSession();
+                string appId = activeSession?.ControlSession?.SourceAppUserModelId ?? "";
+                if (appId.Contains("deezer", StringComparison.OrdinalIgnoreCase) ||
+                    (!string.IsNullOrEmpty(_contextSource) && _contextSource.Contains("deezer", StringComparison.OrdinalIgnoreCase)))
                 {
-                    _lastQueueSignature = sig;
-                    var songInfo = activeSession != null ? MainWindow.TryGetMediaProperties(activeSession.ControlSession) : null;
-                    LoadQueue(songInfo?.Title ?? "", songInfo?.Artist ?? "", forceRefresh: true);
+                    string sig = await DeezerCdpService.GetQueueSignatureAsync();
+                    if (!string.IsNullOrEmpty(sig) && !string.IsNullOrEmpty(_lastQueueSignature) && sig != _lastQueueSignature)
+                    {
+                        _lastQueueSignature = sig;
+                        var songInfo = activeSession != null ? MainWindow.TryGetMediaProperties(activeSession.ControlSession) : null;
+                        LoadQueue(songInfo?.Title ?? "", songInfo?.Artist ?? "", forceRefresh: true);
+                    }
+                    else if (!string.IsNullOrEmpty(sig))
+                    {
+                        _lastQueueSignature = sig;
+                    }
                 }
-                else if (!string.IsNullOrEmpty(sig))
-                {
-                    _lastQueueSignature = sig;
-                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error in QueueWindow _queueWatcherTimer tick: {ex.Message}");
             }
         };
         _queueWatcherTimer.Start();
@@ -120,20 +127,34 @@ public partial class QueueWindow : MicaWindow
 
     private void RefreshButton_Click(object sender, RoutedEventArgs e)
     {
-        var activeSession = _mainWindow.GetActiveMediaSession();
-        var songInfo = activeSession != null ? MainWindow.TryGetMediaProperties(activeSession.ControlSession) : null;
-        LoadQueue(songInfo?.Title ?? "", songInfo?.Artist ?? "", forceRefresh: true);
+        try
+        {
+            var activeSession = _mainWindow.GetActiveMediaSession();
+            var songInfo = activeSession != null ? MainWindow.TryGetMediaProperties(activeSession.ControlSession) : null;
+            LoadQueue(songInfo?.Title ?? "", songInfo?.Artist ?? "", forceRefresh: true);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error in RefreshButton_Click: {ex.Message}");
+        }
     }
 
     private void MediaManager_OnAnyMediaPropertyChanged(MediaManager.MediaSession mediaSession, GlobalSystemMediaTransportControlsSessionMediaProperties mediaProperties)
     {
         Dispatcher.Invoke(() =>
         {
-            string appId = mediaSession?.ControlSession?.SourceAppUserModelId ?? "";
-            if (appId.Contains("deezer", StringComparison.OrdinalIgnoreCase))
+            try
             {
-                // Force fresh queue check from CDP on every track change!
-                LoadQueue(mediaProperties?.Title ?? "", mediaProperties?.Artist ?? "", forceRefresh: true);
+                string appId = mediaSession?.ControlSession?.SourceAppUserModelId ?? "";
+                if (appId.Contains("deezer", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Force fresh queue check from CDP on every track change!
+                    LoadQueue(mediaProperties?.Title ?? "", mediaProperties?.Artist ?? "", forceRefresh: true);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error in MediaManager_OnAnyMediaPropertyChanged: {ex.Message}");
             }
         });
     }

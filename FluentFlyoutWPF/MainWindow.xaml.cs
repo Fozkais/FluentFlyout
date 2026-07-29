@@ -327,13 +327,16 @@ public partial class MainWindow : MicaWindow
         }
     }
 
-    public static GlobalSystemMediaTransportControlsSessionMediaProperties? TryGetMediaProperties(GlobalSystemMediaTransportControlsSession controlSession)
+    public static GlobalSystemMediaTransportControlsSessionMediaProperties? TryGetMediaProperties(GlobalSystemMediaTransportControlsSession? controlSession)
     {
+        if (controlSession == null) return null;
         try
         {
-            return controlSession.TryGetMediaPropertiesAsync().GetAwaiter().GetResult();
+            var asyncOp = controlSession.TryGetMediaPropertiesAsync();
+            if (asyncOp == null) return null;
+            return asyncOp.GetAwaiter().GetResult();
         }
-        catch (COMException ex)
+        catch (Exception ex)
         {
             Logger.Error(ex, "Failed to retrieve data from the player");
             return null;
