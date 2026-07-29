@@ -63,20 +63,22 @@ public partial class QueueWindow : MicaWindow
         // Event-driven track change listener (0 periodic polling overhead)
         _mainWindow.mediaManager.OnAnyMediaPropertyChanged += MediaManager_OnAnyMediaPropertyChanged;
 
-        // Background watcher (2s) to detect queue/track changes made directly inside Deezer Desktop
+        // Background watcher (1.5s) to detect reorder, deletion, shuffle or track changes made directly inside Deezer Desktop
         _queueWatcherTimer = new System.Windows.Threading.DispatcherTimer
         {
-            Interval = TimeSpan.FromSeconds(2)
+            Interval = TimeSpan.FromMilliseconds(1500)
         };
         _queueWatcherTimer.Tick += async (s, e) =>
         {
-            if (_contextSource == "deezer")
+            var activeSession = _mainWindow.GetActiveMediaSession();
+            string appId = activeSession?.ControlSession?.SourceAppUserModelId ?? "";
+            if (appId.Contains("deezer", StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrEmpty(_contextSource) && _contextSource.Contains("deezer", StringComparison.OrdinalIgnoreCase)))
             {
                 string sig = await DeezerCdpService.GetQueueSignatureAsync();
                 if (!string.IsNullOrEmpty(sig) && !string.IsNullOrEmpty(_lastQueueSignature) && sig != _lastQueueSignature)
                 {
                     _lastQueueSignature = sig;
-                    var activeSession = _mainWindow.GetActiveMediaSession();
                     var songInfo = activeSession != null ? MainWindow.TryGetMediaProperties(activeSession.ControlSession) : null;
                     LoadQueue(songInfo?.Title ?? "", songInfo?.Artist ?? "", forceRefresh: true);
                 }

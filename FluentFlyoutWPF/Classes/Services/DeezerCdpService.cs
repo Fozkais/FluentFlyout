@@ -673,16 +673,28 @@ public static class DeezerCdpService
 
     public static async Task<bool> PlayPlaylistAsync(long playlistId)
     {
-        string js = $@"(function() {{
+        string js = $@"(async function() {{
             try {{
-                if (window.dzPlayer && typeof window.dzPlayer.setTrackList === 'function') {{
-                    window.dzPlayer.setTrackList({{ type: 'playlist', id: {playlistId} }});
-                    if (window.dzPlayer.control && typeof window.dzPlayer.control.play === 'function') {{
-                        window.dzPlayer.control.play();
+                const resp = await fetch('https://api.deezer.com/playlist/{playlistId}/tracks?limit=200');
+                if (resp.ok) {{
+                    const json = await resp.json();
+                    if (json.data && Array.isArray(json.data) && json.data.length > 0) {{
+                        const sngIds = json.data.map(t => String(t.id));
+                        if (window.dzPlayer && typeof window.dzPlayer.play === 'function') {{
+                            window.dzPlayer.play({{ type: 'tracks', ids: sngIds }});
+                            if (window.dzPlayer.control && typeof window.dzPlayer.control.play === 'function') {{
+                                window.dzPlayer.control.play();
+                            }}
+                            return 'played';
+                        }}
                     }}
-                    return 'played';
                 }}
             }} catch(e) {{}}
+
+            if (window.dzPlayer && typeof window.dzPlayer.play === 'function') {{
+                window.dzPlayer.play({{ type: 'playlist', id: '{playlistId}' }});
+                return 'played_fallback';
+            }}
             return 'error';
         }})()";
 
@@ -690,17 +702,20 @@ public static class DeezerCdpService
     }
 
     /// <summary>
-    /// Gets a lightweight signature of current Deezer playback queue to detect changes inside Deezer app.
+    /// Gets a full signature of the current Deezer playback queue (track IDs sequence + shuffle + repeat)
+    /// to detect any reorders, track deletions, shuffle changes, or track changes made directly inside Deezer Desktop.
     /// </summary>
     public static async Task<string> GetQueueSignatureAsync()
     {
         string js = @"(function() {
             try {
                 if (window.dzPlayer) {
-                    const songId = typeof window.dzPlayer.getSongId === 'function' ? window.dzPlayer.getSongId() : '';
-                    const count = typeof window.dzPlayer.getNbSongs === 'function' ? window.dzPlayer.getNbSongs() : 0;
-                    const isShuffle = typeof window.dzPlayer.isShuffle === 'function' ? (window.dzPlayer.isShuffle() ? '1' : '0') : '0';
-                    return songId + '_' + count + '_' + isShuffle;
+                    let list = typeof window.dzPlayer.getTrackList === 'function' ? window.dzPlayer.getTrackList() : [];
+                    let ids = Array.isArray(list) ? list.map(t => (t ? (t.SNG_ID || t.id || '') : '')).join(',') : '';
+                    let shuffle = typeof window.dzPlayer.isShuffle === 'function' ? (window.dzPlayer.isShuffle() ? '1' : '0') : '0';
+                    let repeat = typeof window.dzPlayer.getRepeat === 'function' ? String(window.dzPlayer.getRepeat()) : '0';
+                    let curSong = typeof window.dzPlayer.getSongId === 'function' ? String(window.dzPlayer.getSongId()) : '';
+                    return ids + '|' + shuffle + '|' + repeat + '|' + curSong;
                 }
             } catch(e) {}
             return '';
