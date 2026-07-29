@@ -23,6 +23,9 @@ public partial class QueueWindow : MicaWindow
     private System.Windows.Threading.DispatcherTimer? _autoCloseTimer;
     private List<DeezerTrack> _fullQueue = new();
 
+    private System.Windows.Threading.DispatcherTimer? _queueWatcherTimer;
+    private string _lastQueueSignature = string.Empty;
+
     public QueueWindow(string currentTitle, string currentArtist)
     {
         ActiveInstance = this;
@@ -60,6 +63,31 @@ public partial class QueueWindow : MicaWindow
         // Event-driven track change listener (0 periodic polling overhead)
         _mainWindow.mediaManager.OnAnyMediaPropertyChanged += MediaManager_OnAnyMediaPropertyChanged;
 
+        // Background watcher (2s) to detect queue/track changes made directly inside Deezer Desktop
+        _queueWatcherTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(2)
+        };
+        _queueWatcherTimer.Tick += async (s, e) =>
+        {
+            if (_contextSource == "deezer")
+            {
+                string sig = await DeezerCdpService.GetQueueSignatureAsync();
+                if (!string.IsNullOrEmpty(sig) && !string.IsNullOrEmpty(_lastQueueSignature) && sig != _lastQueueSignature)
+                {
+                    _lastQueueSignature = sig;
+                    var activeSession = _mainWindow.GetActiveMediaSession();
+                    var songInfo = activeSession != null ? MainWindow.TryGetMediaProperties(activeSession.ControlSession) : null;
+                    LoadQueue(songInfo?.Title ?? "", songInfo?.Artist ?? "", forceRefresh: true);
+                }
+                else if (!string.IsNullOrEmpty(sig))
+                {
+                    _lastQueueSignature = sig;
+                }
+            }
+        };
+        _queueWatcherTimer.Start();
+
         MouseEnter += (s, e) => _autoCloseTimer?.Stop();
         MouseLeave += (s, e) =>
         {
@@ -83,6 +111,7 @@ public partial class QueueWindow : MicaWindow
         {
             if (ActiveInstance == this) ActiveInstance = null;
             _autoCloseTimer?.Stop();
+            _queueWatcherTimer?.Stop();
             _mainWindow.mediaManager.OnAnyMediaPropertyChanged -= MediaManager_OnAnyMediaPropertyChanged;
         };
     }

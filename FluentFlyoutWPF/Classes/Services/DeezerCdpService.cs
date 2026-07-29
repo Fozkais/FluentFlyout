@@ -524,12 +524,26 @@ public static class DeezerCdpService
         string js = @"(async function() {
             try {
                 let userId = '';
+
                 if (window.location && window.location.href) {
-                    const match = window.location.href.match(/\/profile\/(\d+)/);
-                    if (match) userId = match[1];
+                    const m = window.location.href.match(/\/profile\/(\d+)/);
+                    if (m) userId = m[1];
                 }
-                if (!userId && window.dzPlayer && typeof window.dzPlayer.getUserId === 'function') {
-                    userId = String(window.dzPlayer.getUserId() || '');
+
+                if (!userId) {
+                    const links = Array.from(document.querySelectorAll('a[href*=""/profile/""]'));
+                    for (const a of links) {
+                        const m = a.href.match(/\/profile\/(\d+)/);
+                        if (m) { userId = m[1]; break; }
+                    }
+                }
+
+                if (!userId && typeof localStorage !== 'undefined') {
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        const m = key ? key.match(/_(\d{8,})/) : null;
+                        if (m) { userId = m[1]; break; }
+                    }
                 }
 
                 if (userId) {
@@ -563,8 +577,20 @@ public static class DeezerCdpService
             {
                 string getUserIdJs = @"(function() {
                     if (window.location && window.location.href) {
-                        const match = window.location.href.match(/\/profile\/(\d+)/);
-                        if (match) return match[1];
+                        const m = window.location.href.match(/\/profile\/(\d+)/);
+                        if (m) return m[1];
+                    }
+                    const links = Array.from(document.querySelectorAll('a[href*=""/profile/""]'));
+                    for (const a of links) {
+                        const m = a.href.match(/\/profile\/(\d+)/);
+                        if (m) return m[1];
+                    }
+                    if (typeof localStorage !== 'undefined') {
+                        for (let i = 0; i < localStorage.length; i++) {
+                            const key = localStorage.key(i);
+                            const m = key ? key.match(/_(\d{8,})/) : null;
+                            if (m) return m[1];
+                        }
                     }
                     return '';
                 })()";
@@ -661,6 +687,27 @@ public static class DeezerCdpService
         }})()";
 
         return await ExecuteJsAsync(js);
+    }
+
+    /// <summary>
+    /// Gets a lightweight signature of current Deezer playback queue to detect changes inside Deezer app.
+    /// </summary>
+    public static async Task<string> GetQueueSignatureAsync()
+    {
+        string js = @"(function() {
+            try {
+                if (window.dzPlayer) {
+                    const songId = typeof window.dzPlayer.getSongId === 'function' ? window.dzPlayer.getSongId() : '';
+                    const count = typeof window.dzPlayer.getNbSongs === 'function' ? window.dzPlayer.getNbSongs() : 0;
+                    const isShuffle = typeof window.dzPlayer.isShuffle === 'function' ? (window.dzPlayer.isShuffle() ? '1' : '0') : '0';
+                    return songId + '_' + count + '_' + isShuffle;
+                }
+            } catch(e) {}
+            return '';
+        })()";
+
+        string? sig = await EvaluateJsAndReturnStringAsync(js);
+        return sig?.Trim('"', ' ') ?? "";
     }
 }
 
