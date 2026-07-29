@@ -452,7 +452,7 @@ public static class DeezerCdpService
     {
         string js = @"(function() {
             if (window.dzPlayer && window.dzPlayer.control) {
-                const cur = typeof window.dzPlayer.control.getShuffle === 'function' ? window.dzPlayer.control.getShuffle() : false;
+                const cur = typeof window.dzPlayer.isShuffle === 'function' ? window.dzPlayer.isShuffle() : false;
                 const next = !cur;
                 if (typeof window.dzPlayer.control.setShuffle === 'function') {
                     window.dzPlayer.control.setShuffle(next);
@@ -469,7 +469,7 @@ public static class DeezerCdpService
     {
         string js = @"(function() {
             if (window.dzPlayer && window.dzPlayer.control) {
-                const cur = typeof window.dzPlayer.control.getRepeat === 'function' ? window.dzPlayer.control.getRepeat() : 0;
+                const cur = typeof window.dzPlayer.getRepeat === 'function' ? window.dzPlayer.getRepeat() : 0;
                 const next = (cur + 1) % 3;
                 if (typeof window.dzPlayer.control.setRepeat === 'function') {
                     window.dzPlayer.control.setRepeat(next);
@@ -486,7 +486,7 @@ public static class DeezerCdpService
     public static async Task<bool> GetShuffleStateAsync()
     {
         string js = @"(function() {
-            return window.dzPlayer && window.dzPlayer.control && typeof window.dzPlayer.control.getShuffle === 'function' ? (window.dzPlayer.control.getShuffle() ? 'true' : 'false') : 'false';
+            return (window.dzPlayer && typeof window.dzPlayer.isShuffle === 'function' && window.dzPlayer.isShuffle()) ? 'true' : 'false';
         })()";
         string? res = await EvaluateJsAndReturnStringAsync(js);
         return res == "true" || res == "\"true\"";
@@ -495,7 +495,7 @@ public static class DeezerCdpService
     public static async Task<int> GetRepeatStateAsync()
     {
         string js = @"(function() {
-            return window.dzPlayer && window.dzPlayer.control && typeof window.dzPlayer.control.getRepeat === 'function' ? String(window.dzPlayer.control.getRepeat()) : '0';
+            return (window.dzPlayer && typeof window.dzPlayer.getRepeat === 'function') ? String(window.dzPlayer.getRepeat()) : '0';
         })()";
         string? res = await EvaluateJsAndReturnStringAsync(js);
         if (int.TryParse(res?.Trim('"', ' '), out int mode)) return mode;
@@ -511,39 +511,20 @@ public static class DeezerCdpService
 
         string js = @"(async function() {
             try {
-                if (!window.dzPlayer) return '[]';
-
-                // Method 1: dzPlayer cached playlists
-                if (typeof window.dzPlayer.getUserData === 'function') {
-                    const data = window.dzPlayer.getUserData();
-                    if (data) {
-                        const playlists = data.PLAYLISTS || data.playlists || (data.USER && data.USER.PLAYLISTS) || [];
-                        if (Array.isArray(playlists) && playlists.length > 0) {
-                            return JSON.stringify(playlists.map(p => ({
-                                id: p.PLAYLIST_ID || p.id || 0,
-                                title: p.TITLE || p.title || 'Playlist',
-                                picture: p.PICTURE_PATH || p.picture || p.cover || '',
-                                tracks: p.NB_SONGS || p.nb_tracks || p.tracks || 0
-                            })));
-                        }
-                    }
+                let userId = '';
+                if (window.location && window.location.href) {
+                    const match = window.location.href.match(/\/profile\/(\d+)/);
+                    if (match) userId = match[1];
                 }
-
-                // Method 2: Fetch via Deezer API inside page context
-                let userId = null;
-                if (typeof window.dzPlayer.getUserId === 'function') {
-                    userId = window.dzPlayer.getUserId();
-                }
-                if (!userId && typeof window.dzPlayer.getUserData === 'function') {
-                    const data = window.dzPlayer.getUserData();
-                    if (data) userId = data.USER_ID || (data.USER && (data.USER.USER_ID || data.USER.ID));
+                if (!userId && window.dzPlayer && typeof window.dzPlayer.getUserId === 'function') {
+                    userId = String(window.dzPlayer.getUserId() || '');
                 }
 
                 if (userId) {
                     const resp = await fetch('https://api.deezer.com/user/' + userId + '/playlists?limit=50');
                     if (resp.ok) {
                         const resJson = await resp.json();
-                        if (resJson && resJson.data && Array.isArray(resJson.data) && resJson.data.length > 0) {
+                        if (resJson && resJson.data && Array.isArray(resJson.data)) {
                             return JSON.stringify(resJson.data.map(p => ({
                                 id: p.id,
                                 title: p.title,
@@ -563,28 +544,23 @@ public static class DeezerCdpService
             list = ParsePlaylistsJson(json);
         }
 
-        // Failsafe Method 3: If list is still empty, get userId and fetch directly via C# HttpClient
+        // Failsafe Method: If list is still empty, query profile ID via C# HttpClient
         if (list.Count == 0)
         {
             try
             {
                 string getUserIdJs = @"(function() {
-                    try {
-                        if (window.dzPlayer) {
-                            if (typeof window.dzPlayer.getUserId === 'function') return String(window.dzPlayer.getUserId());
-                            if (window.dzPlayer.getUserData) {
-                                const ud = window.dzPlayer.getUserData();
-                                return String(ud.USER_ID || (ud.USER && (ud.USER.USER_ID || ud.USER.ID)) || '');
-                            }
-                        }
-                    } catch(e) {}
+                    if (window.location && window.location.href) {
+                        const match = window.location.href.match(/\/profile\/(\d+)/);
+                        if (match) return match[1];
+                    }
                     return '';
                 })()";
 
                 string? userId = await EvaluateJsAndReturnStringAsync(getUserIdJs);
                 userId = userId?.Trim('"', ' ', '\r', '\n');
 
-                if (!string.IsNullOrEmpty(userId) && userId != "0" && userId != "null")
+                if (!string.IsNullOrEmpty(userId))
                 {
                     string apiUrl = $"https://api.deezer.com/user/{userId}/playlists?limit=50";
                     string apiResponse = await _httpClient.GetStringAsync(apiUrl);
@@ -661,15 +637,12 @@ public static class DeezerCdpService
     {
         string js = $@"(function() {{
             try {{
-                if (window.dzPlayer) {{
-                    if (typeof window.dzPlayer.playPlaylist === 'function') {{
-                        window.dzPlayer.playPlaylist({playlistId});
-                        return 'played';
+                if (window.dzPlayer && typeof window.dzPlayer.setTrackList === 'function') {{
+                    window.dzPlayer.setTrackList({{ type: 'playlist', id: {playlistId} }});
+                    if (window.dzPlayer.control && typeof window.dzPlayer.control.play === 'function') {{
+                        window.dzPlayer.control.play();
                     }}
-                    if (typeof window.dzPlayer.playContext === 'function') {{
-                        window.dzPlayer.playContext('playlist', {playlistId});
-                        return 'played_context';
-                    }}
+                    return 'played';
                 }}
             }} catch(e) {{}}
             return 'error';

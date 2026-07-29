@@ -1082,20 +1082,23 @@ public partial class MainWindow : MicaWindow
                     bool canRepeat = isDeezer || mediaProperties.Controls.IsRepeatEnabled;
                     ControlRepeat.IsEnabled = canRepeat;
                     ControlRepeat.Opacity = canRepeat ? 1 : 0.35;
-                    if (mediaProperties.AutoRepeatMode == global::Windows.Media.MediaPlaybackAutoRepeatMode.List)
+                    if (!isDeezer)
                     {
-                        SymbolRepeat.Symbol = Wpf.Ui.Controls.SymbolRegular.ArrowRepeatAll24;
-                        SymbolRepeat.Opacity = 1;
-                    }
-                    else if (mediaProperties.AutoRepeatMode == global::Windows.Media.MediaPlaybackAutoRepeatMode.Track)
-                    {
-                        SymbolRepeat.Symbol = Wpf.Ui.Controls.SymbolRegular.ArrowRepeat124;
-                        SymbolRepeat.Opacity = 1;
-                    }
-                    else if (mediaProperties.AutoRepeatMode == global::Windows.Media.MediaPlaybackAutoRepeatMode.None)
-                    {
-                        SymbolRepeat.Symbol = Wpf.Ui.Controls.SymbolRegular.ArrowRepeatAllOff24;
-                        SymbolRepeat.Opacity = 0.5;
+                        if (mediaProperties.AutoRepeatMode == global::Windows.Media.MediaPlaybackAutoRepeatMode.List)
+                        {
+                            SymbolRepeat.Symbol = Wpf.Ui.Controls.SymbolRegular.ArrowRepeatAll24;
+                            SymbolRepeat.Opacity = 1;
+                        }
+                        else if (mediaProperties.AutoRepeatMode == global::Windows.Media.MediaPlaybackAutoRepeatMode.Track)
+                        {
+                            SymbolRepeat.Symbol = Wpf.Ui.Controls.SymbolRegular.ArrowRepeat124;
+                            SymbolRepeat.Opacity = 1;
+                        }
+                        else
+                        {
+                            SymbolRepeat.Symbol = Wpf.Ui.Controls.SymbolRegular.ArrowRepeatAllOff24;
+                            SymbolRepeat.Opacity = 0.5;
+                        }
                     }
                 }
                 else ControlRepeat.Visibility = Visibility.Collapsed;
@@ -1107,15 +1110,18 @@ public partial class MainWindow : MicaWindow
                     bool canShuffle = isDeezer || mediaProperties.Controls.IsShuffleEnabled;
                     ControlShuffle.IsEnabled = canShuffle;
                     ControlShuffle.Opacity = canShuffle ? 1 : 0.35;
-                    if (mediaProperties.IsShuffleActive == true)
+                    if (!isDeezer)
                     {
-                        SymbolShuffle.Symbol = Wpf.Ui.Controls.SymbolRegular.ArrowShuffle24;
-                        SymbolShuffle.Opacity = 1;
-                    }
-                    else
-                    {
-                        SymbolShuffle.Symbol = Wpf.Ui.Controls.SymbolRegular.ArrowShuffleOff24;
-                        SymbolShuffle.Opacity = 0.5;
+                        if (mediaProperties.IsShuffleActive == true)
+                        {
+                            SymbolShuffle.Symbol = Wpf.Ui.Controls.SymbolRegular.ArrowShuffle24;
+                            SymbolShuffle.Opacity = 1;
+                        }
+                        else
+                        {
+                            SymbolShuffle.Symbol = Wpf.Ui.Controls.SymbolRegular.ArrowShuffleOff24;
+                            SymbolShuffle.Opacity = 0.5;
+                        }
                     }
                 }
                 else ControlShuffle.Visibility = Visibility.Collapsed;
