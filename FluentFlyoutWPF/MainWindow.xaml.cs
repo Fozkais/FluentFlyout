@@ -649,20 +649,41 @@ public partial class MainWindow : MicaWindow
         pauseOtherMediaSessionsIfNeeded(mediaSession);
 
         var focusedSession = GetActiveMediaSession();
-        if (focusedSession == null)
-        {
-            taskbarWindow?.UpdateUi("-", "-", null, GlobalSystemMediaTransportControlsSessionPlaybackStatus.Closed);
-            return;
-        }
+        var tbSongInfo = focusedSession != null ? TryGetMediaProperties(focusedSession.ControlSession) : null;
 
-        var tbSongInfo = TryGetMediaProperties(focusedSession.ControlSession);
-        if (tbSongInfo != null)
+        if (tbSongInfo != null && !string.IsNullOrEmpty(tbSongInfo.Title))
         {
             var tbThumbnail = BitmapHelper.GetThumbnail(tbSongInfo.Thumbnail);
             BitmapHelper.GetDominantColors(1);
-            var tbPlayback = focusedSession.ControlSession.GetPlaybackInfo();
+            var tbPlayback = focusedSession?.ControlSession?.GetPlaybackInfo();
 
             taskbarWindow?.UpdateUi(tbSongInfo.Title, tbSongInfo.Artist, tbThumbnail, tbPlayback?.PlaybackStatus, tbPlayback?.Controls);
+        }
+        else if (SettingsManager.Current.DeezerQueueEnabled && DeezerCdpService.IsCdpAvailableSync)
+        {
+            try
+            {
+                var cdpSong = DeezerCdpService.GetCurrentSongAsync().GetAwaiter().GetResult();
+                if (cdpSong != null && !string.IsNullOrEmpty(cdpSong.Title))
+                {
+                    var playbackStatus = cdpSong.IsPlaying 
+                        ? GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing 
+                        : GlobalSystemMediaTransportControlsSessionPlaybackStatus.Paused;
+                    taskbarWindow?.UpdateUi(cdpSong.Title, cdpSong.Artist, null, playbackStatus);
+                }
+                else
+                {
+                    taskbarWindow?.UpdateUi("-", "-", null, GlobalSystemMediaTransportControlsSessionPlaybackStatus.Closed);
+                }
+            }
+            catch
+            {
+                taskbarWindow?.UpdateUi("-", "-", null, GlobalSystemMediaTransportControlsSessionPlaybackStatus.Closed);
+            }
+        }
+        else
+        {
+            taskbarWindow?.UpdateUi("-", "-", null, GlobalSystemMediaTransportControlsSessionPlaybackStatus.Closed);
         }
 
         if (IsVisible)

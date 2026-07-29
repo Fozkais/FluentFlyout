@@ -83,12 +83,13 @@ public static class DeezerCdpService
                 return;
             }
 
-            // Start Deezer with --remote-debugging-port=9222
+            // Start Deezer with --remote-debugging-port=9222 in background
             var psi = new ProcessStartInfo
             {
                 FileName = exePath,
-                Arguments = $"--remote-debugging-port={DebugPort}",
-                UseShellExecute = true
+                Arguments = $"--remote-debugging-port={DebugPort} --minimized",
+                UseShellExecute = true,
+                WindowStyle = ProcessWindowStyle.Minimized
             };
             Process.Start(psi);
 
@@ -116,16 +117,6 @@ public static class DeezerCdpService
     {
         if (await IsCdpAvailableAsync())
         {
-            // Already running with CDP: bring window to front
-            try
-            {
-                var procs = Process.GetProcessesByName("Deezer");
-                if (procs.Length > 0 && procs[0].MainWindowHandle != IntPtr.Zero)
-                {
-                    SetForegroundWindow(procs[0].MainWindowHandle);
-                }
-            }
-            catch {}
             return;
         }
 
@@ -151,8 +142,9 @@ public static class DeezerCdpService
             var psi = new ProcessStartInfo
             {
                 FileName = exePath,
-                Arguments = $"--remote-debugging-port={DebugPort}",
-                UseShellExecute = true
+                Arguments = $"--remote-debugging-port={DebugPort} --minimized",
+                UseShellExecute = true,
+                WindowStyle = ProcessWindowStyle.Minimized
             };
             Process.Start(psi);
 
@@ -166,6 +158,55 @@ public static class DeezerCdpService
         catch (Exception ex)
         {
             Logger.Error(ex, "Failed to launch Deezer with remote debugging port");
+        }
+    }
+
+    public class DeezerCurrentSong
+    {
+        public string Title { get; set; } = string.Empty;
+        public string Artist { get; set; } = string.Empty;
+        public string CoverUrl { get; set; } = string.Empty;
+        public bool IsPlaying { get; set; }
+    }
+
+    public static async Task<DeezerCurrentSong?> GetCurrentSongAsync()
+    {
+        string js = @"(function() {
+            try {
+                if (window.dzPlayer) {
+                    const song = typeof window.dzPlayer.getCurrentSong === 'function' ? window.dzPlayer.getCurrentSong() : null;
+                    const isPlaying = typeof window.dzPlayer.isPlaying === 'function' ? window.dzPlayer.isPlaying() : false;
+                    if (song) {
+                        return JSON.stringify({
+                            title: song.SNG_TITLE || song.title || '',
+                            artist: song.ART_NAME || song.artist || '',
+                            cover: song.ALB_PICTURE ? 'https://e-cdns-images.dzcdn.net/images/cover/' + song.ALB_PICTURE + '/250x250-000000-80-0-0.jpg' : '',
+                            isPlaying: isPlaying
+                        });
+                    }
+                }
+            } catch(e) {}
+            return '';
+        })()";
+
+        string? json = await EvaluateJsAndReturnStringAsync(js);
+        if (string.IsNullOrEmpty(json)) return null;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            return new DeezerCurrentSong
+            {
+                Title = root.GetProperty("title").GetString() ?? "",
+                Artist = root.GetProperty("artist").GetString() ?? "",
+                CoverUrl = root.GetProperty("cover").GetString() ?? "",
+                IsPlaying = root.GetProperty("isPlaying").GetBoolean()
+            };
+        }
+        catch
+        {
+            return null;
         }
     }
 
