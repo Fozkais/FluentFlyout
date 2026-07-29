@@ -91,13 +91,14 @@ public static class DeezerCdpService
                 return;
             }
 
-            // Start Deezer with --remote-debugging-port=9222 in background
+            // Start Deezer with --remote-debugging-port=9222 completely detached from FluentFlyout
             var psi = new ProcessStartInfo
             {
-                FileName = exePath,
-                Arguments = $"--remote-debugging-port={DebugPort} --minimized",
-                UseShellExecute = true,
-                WindowStyle = ProcessWindowStyle.Minimized
+                FileName = "cmd.exe",
+                Arguments = $"/c start \"\" \"{exePath}\" --remote-debugging-port={DebugPort} --minimized",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden
             };
             Process.Start(psi);
 
@@ -163,10 +164,11 @@ public static class DeezerCdpService
 
             var psi = new ProcessStartInfo
             {
-                FileName = exePath,
-                Arguments = $"--remote-debugging-port={DebugPort} --minimized",
-                UseShellExecute = true,
-                WindowStyle = ProcessWindowStyle.Minimized
+                FileName = "cmd.exe",
+                Arguments = $"/c start \"\" \"{exePath}\" --remote-debugging-port={DebugPort} --minimized",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden
             };
             Process.Start(psi);
 

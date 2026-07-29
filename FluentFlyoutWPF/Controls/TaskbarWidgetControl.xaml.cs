@@ -144,21 +144,18 @@ public partial class TaskbarWidgetControl : UserControl
 
     private void Grid_MouseEnter(object sender, MouseEventArgs e)
     {
-        if (string.IsNullOrEmpty(SongTitle.Text + SongArtist.Text)) return;
-
         SolidColorBrush targetBackgroundBrush;
-        // hover effects with animations, hard-coded colors because I can't find the resource brushes
         WindowsThemeDetector.GetWindowsTheme(out _, out var systemTheme);
         bool isDark = systemTheme == WindowsThemeDetector.ThemeMode.Dark;
 
         if (isDark)
         { // dark mode
-            targetBackgroundBrush = new SolidColorBrush(Color.FromArgb(197, 255, 255, 255)) { Opacity = 0.075 };
-            TopBorder.BorderBrush = new SolidColorBrush(Color.FromArgb(93, 255, 255, 255)) { Opacity = 0.25 };
+            targetBackgroundBrush = new SolidColorBrush(Color.FromArgb(197, 255, 255, 255)) { Opacity = 0.12 };
+            TopBorder.BorderBrush = new SolidColorBrush(Color.FromArgb(93, 255, 255, 255)) { Opacity = 0.35 };
         }
         else
         { // light mode
-            targetBackgroundBrush = new SolidColorBrush(Color.FromArgb(255, 255, 255, 255)) { Opacity = 0.6 };
+            targetBackgroundBrush = new SolidColorBrush(Color.FromArgb(255, 255, 255, 255)) { Opacity = 0.75 };
             TopBorder.BorderBrush = new SolidColorBrush(Color.FromArgb(93, 255, 255, 255)) { Opacity = 1 };
         }
 
@@ -166,32 +163,36 @@ public partial class TaskbarWidgetControl : UserControl
         var backgroundAnimation = new ColorAnimation
         {
             To = targetBackgroundBrush.Color,
-            Duration = TimeSpan.FromMilliseconds(200),
+            Duration = TimeSpan.FromMilliseconds(180),
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
         };
 
         var backgroundOpacityAnimation = new DoubleAnimation
         {
             To = targetBackgroundBrush.Opacity,
-            Duration = TimeSpan.FromMilliseconds(200),
+            Duration = TimeSpan.FromMilliseconds(180),
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
         };
 
-        // rare case where background is not a SolidColorBrush after SetupWindow
         if (MainBorder.Background is not SolidColorBrush)
         {
-            MainBorder.Background = new SolidColorBrush(Colors.Transparent);
-            MainBorder.Background.Opacity = 0;
+            MainBorder.Background = new SolidColorBrush(Colors.Transparent) { Opacity = 0 };
         }
 
         MainBorder.Background.BeginAnimation(SolidColorBrush.ColorProperty, backgroundAnimation);
         MainBorder.Background.BeginAnimation(SolidColorBrush.OpacityProperty, backgroundOpacityAnimation);
+
+        // Hover scale feedback for music note icon button
+        DoubleAnimation scaleAnim = new DoubleAnimation(1.10, TimeSpan.FromMilliseconds(180))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+        };
+        SongImageScale.BeginAnimation(ScaleTransform.ScaleXProperty, scaleAnim);
+        SongImageScale.BeginAnimation(ScaleTransform.ScaleYProperty, scaleAnim);
     }
 
     private void Grid_MouseLeave(object sender, MouseEventArgs e)
     {
-        if (string.IsNullOrEmpty(SongTitle.Text + SongArtist.Text)) return;
-
         // Animate back to transparent
         var backgroundAnimation = new ColorAnimation
         {
@@ -211,10 +212,37 @@ public partial class TaskbarWidgetControl : UserControl
         MainBorder.Background?.BeginAnimation(SolidColorBrush.OpacityProperty, backgroundOpacityAnimation);
 
         TopBorder.BorderBrush = Brushes.Transparent;
+
+        // Reset scale back to 1.0
+        DoubleAnimation scaleAnim = new DoubleAnimation(1.0, TimeSpan.FromMilliseconds(200))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
+        };
+        SongImageScale.BeginAnimation(ScaleTransform.ScaleXProperty, scaleAnim);
+        SongImageScale.BeginAnimation(ScaleTransform.ScaleYProperty, scaleAnim);
+    }
+
+    private void Grid_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        // Press-down tactile feedback animation
+        DoubleAnimation scaleAnim = new DoubleAnimation(0.88, TimeSpan.FromMilliseconds(100))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+        };
+        SongImageScale.BeginAnimation(ScaleTransform.ScaleXProperty, scaleAnim);
+        SongImageScale.BeginAnimation(ScaleTransform.ScaleYProperty, scaleAnim);
     }
 
     private void Grid_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
+        // Release bounce-back scale animation
+        DoubleAnimation scaleAnim = new DoubleAnimation(1.0, TimeSpan.FromMilliseconds(150))
+        {
+            EasingFunction = new ElasticEase { Oscillations = 1, Springiness = 6, EasingMode = EasingMode.EaseOut }
+        };
+        SongImageScale.BeginAnimation(ScaleTransform.ScaleXProperty, scaleAnim);
+        SongImageScale.BeginAnimation(ScaleTransform.ScaleYProperty, scaleAnim);
+
         if (_mainWindow == null) return;
 
         // If no media is playing (fallback music note is displayed) and Deezer Integration is enabled:
@@ -586,6 +614,9 @@ public partial class TaskbarWidgetControl : UserControl
                 SongImage.ImageSource = icon;
                 BackgroundImage.Source = icon;
                 SongImageBorder.Margin = new Thickness(0, 0, 0, -2); // align image better when cover is present
+                SongImageBorder.Background = null;
+                MainGrid.Cursor = Cursors.Arrow;
+                SongImageBorder.Cursor = Cursors.Arrow;
             }
             else
             {
@@ -593,6 +624,14 @@ public partial class TaskbarWidgetControl : UserControl
                 SongImagePlaceholder.Visibility = Visibility.Visible;
                 SongImage.ImageSource = null;
                 BackgroundImage.Source = null;
+
+                if (string.IsNullOrEmpty(_actualTitle) && string.IsNullOrEmpty(_actualArtist) && SettingsManager.Current.DeezerQueueEnabled)
+                {
+                    MainGrid.Cursor = Cursors.Hand;
+                    SongImageBorder.Cursor = Cursors.Hand;
+                    ToolTipService.SetToolTip(SongImageBorder, "Lancer Deezer Desktop (Mode CDP)");
+                    ToolTipService.SetToolTip(MainBorder, "Lancer Deezer Desktop (Mode CDP)");
+                }
             }
 
             SongTitle.Visibility = Visibility.Visible;
