@@ -172,7 +172,6 @@ public static class DeezerCdpService
     {
         await EnsureDeezerRunningWithDebugPortAsync();
 
-        await _wsLock.WaitAsync();
         try
         {
             var ws = await GetConnectedWebSocketAsync();
@@ -214,17 +213,12 @@ public static class DeezerCdpService
             _persistentWs = null;
             return false;
         }
-        finally
-        {
-            _wsLock.Release();
-        }
     }
 
     public static async Task<string?> EvaluateJsAndReturnStringAsync(string jsExpression)
     {
         await EnsureDeezerRunningWithDebugPortAsync();
 
-        await _wsLock.WaitAsync();
         try
         {
             var ws = await GetConnectedWebSocketAsync();
@@ -278,10 +272,6 @@ public static class DeezerCdpService
             _persistentWs?.Dispose();
             _persistentWs = null;
             return null;
-        }
-        finally
-        {
-            _wsLock.Release();
         }
     }
 
