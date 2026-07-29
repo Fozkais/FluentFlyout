@@ -88,7 +88,8 @@ public partial class QueueWindow : MicaWindow
             string appId = mediaSession?.ControlSession?.SourceAppUserModelId ?? "";
             if (appId.Contains("deezer", StringComparison.OrdinalIgnoreCase))
             {
-                LoadQueue(mediaProperties?.Title ?? "", mediaProperties?.Artist ?? "");
+                // Force fresh queue check from CDP on every track change!
+                LoadQueue(mediaProperties?.Title ?? "", mediaProperties?.Artist ?? "", forceRefresh: true);
             }
         });
     }
@@ -107,7 +108,7 @@ public partial class QueueWindow : MicaWindow
         }
     }
 
-    private async void LoadQueue(string currentTitle, string currentArtist)
+    private async void LoadQueue(string currentTitle, string currentArtist, bool forceRefresh = false)
     {
         bool isInitialLoad = (QueueListView.ItemsSource == null);
         if (isInitialLoad)
@@ -119,7 +120,7 @@ public partial class QueueWindow : MicaWindow
         // Pre-warm CDP debug port in background
         _ = DeezerCdpService.EnsureDeezerRunningWithDebugPortAsync();
 
-        var newTracks = await DeezerService.GetQueueAsync(currentTitle, currentArtist);
+        var newTracks = await DeezerService.GetQueueAsync(currentTitle, currentArtist, forceRefresh);
         _fullQueue = newTracks ?? new List<DeezerTrack>();
 
         LoadingBar.Visibility = Visibility.Collapsed;

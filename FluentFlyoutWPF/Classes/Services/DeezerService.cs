@@ -68,23 +68,10 @@ public static class DeezerService
         _lastCacheTime = DateTime.MinValue;
     }
 
-    public static async Task<List<DeezerTrack>> GetQueueAsync(string currentTitle, string currentArtist)
+    public static async Task<List<DeezerTrack>> GetQueueAsync(string currentTitle, string currentArtist, bool forceRefresh = false)
     {
-        // Check if currently playing track is in our cached queue
-        bool cacheMatchesCurrentTrack = false;
-        if (_cachedQueue.Count > 0 && !string.IsNullOrEmpty(currentTitle))
-        {
-            cacheMatchesCurrentTrack = _cachedQueue.Any(t =>
-                t.Title.Equals(currentTitle, StringComparison.OrdinalIgnoreCase) ||
-                (t.IsCurrent && t.Title.Equals(currentTitle, StringComparison.OrdinalIgnoreCase)));
-        }
-        else if (_cachedQueue.Count > 0 && string.IsNullOrEmpty(currentTitle))
-        {
-            cacheMatchesCurrentTrack = true;
-        }
-
-        // Return cached queue ONLY IF current track belongs to cached queue and cache is fresh (< 15s)
-        if (_cachedQueue.Count > 0 && cacheMatchesCurrentTrack && (DateTime.UtcNow - _lastCacheTime).TotalSeconds < 15)
+        // If not forced and cache is fresh, return cached queue immediately
+        if (!forceRefresh && _cachedQueue.Count > 0 && (DateTime.UtcNow - _lastCacheTime).TotalSeconds < 30)
         {
             return _cachedQueue;
         }
