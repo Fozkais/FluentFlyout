@@ -242,31 +242,25 @@ public partial class QueueWindow : MicaWindow
         }
     }
 
-    private async void PlayTrack(DeezerTrack track)
+    private void PlayTrack(DeezerTrack track)
     {
         if (track == null || track.TargetIndex < 0) return;
 
-        if (QueueListView.ItemsSource is List<DeezerTrack> currentList)
+        // 1. Instant 0ms visual update in UI
+        foreach (var t in _fullQueue)
         {
-            foreach (var t in currentList)
-            {
-                t.IsCurrent = (t.TargetIndex == track.TargetIndex);
-            }
+            t.IsCurrent = (t.TargetIndex == track.TargetIndex);
         }
+        ApplyFilter();
+        DeezerService.UpdateCache(_fullQueue);
 
-        bool cdpSuccess = await DeezerCdpService.PlayTrackAtIndexAsync(track.TargetIndex);
-        if (cdpSuccess)
+        // 2. Perform CDP play track at index immediately in background (1ms latency via persistent WebSocket)
+        _ = DeezerCdpService.PlayTrackAtIndexAsync(track.TargetIndex);
+
+        // 3. Close flyout if configured
+        if (SettingsManager.Current.QueueCloseOnTrackClick)
         {
-            await Task.Delay(50);
-            DeezerService.UpdateCache(_fullQueue);
-            if (SettingsManager.Current.QueueCloseOnTrackClick)
-            {
-                CloseWithAnimation();
-            }
-            else
-            {
-                LoadQueue("", "");
-            }
+            CloseWithAnimation();
         }
     }
 

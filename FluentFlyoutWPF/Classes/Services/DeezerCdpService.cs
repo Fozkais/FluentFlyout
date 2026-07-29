@@ -106,12 +106,28 @@ public static class DeezerCdpService
         }
     }
 
-    public static async Task<bool> ExecuteJsAsync(string jsExpression)
-    {
-        await EnsureDeezerRunningWithDebugPortAsync();
+    private static ClientWebSocket? _persistentWs;
+    private static readonly SemaphoreSlim _wsLock = new SemaphoreSlim(1, 1);
+    private static int _nextMessageId = 1;
 
+    private static async Task<ClientWebSocket?> GetConnectedWebSocketAsync()
+    {
+        if (_persistentWs != null && _persistentWs.State == WebSocketState.Open)
+        {
+            return _persistentWs;
+        }
+
+        await _wsLock.WaitAsync();
         try
         {
+            if (_persistentWs != null && _persistentWs.State == WebSocketState.Open)
+            {
+                return _persistentWs;
+            }
+
+            _persistentWs?.Dispose();
+            _persistentWs = null;
+
             string json = await HttpClient.GetStringAsync($"http://localhost:{DebugPort}/json");
             using var doc = JsonDocument.Parse(json);
             
@@ -120,7 +136,6 @@ public static class DeezerCdpService
             {
                 string url = elem.TryGetProperty("url", out var u) ? u.GetString() ?? "" : "";
                 string type = elem.TryGetProperty("type", out var t) ? t.GetString() ?? "" : "";
-                // Pick the main player window index.html (skip titlebar.html and background workers)
                 if (type == "page" && url.Contains("index.html"))
                 {
                     if (elem.TryGetProperty("webSocketDebuggerUrl", out var wsProp))
@@ -131,19 +146,43 @@ public static class DeezerCdpService
                 }
             }
 
-            if (string.IsNullOrEmpty(wsUrl))
-            {
-                Logger.Warn("Could not find Deezer index.html WebSocket URL from CDP /json");
-                return false;
-            }
+            if (string.IsNullOrEmpty(wsUrl)) return null;
 
-            using var ws = new ClientWebSocket();
-            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var ws = new ClientWebSocket();
+            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
             await ws.ConnectAsync(new Uri(wsUrl), cts.Token);
 
+            _persistentWs = ws;
+            return _persistentWs;
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"Failed to connect CDP WebSocket: {ex.Message}");
+            _persistentWs?.Dispose();
+            _persistentWs = null;
+            return null;
+        }
+        finally
+        {
+            _wsLock.Release();
+        }
+    }
+
+    public static async Task<bool> ExecuteJsAsync(string jsExpression)
+    {
+        await EnsureDeezerRunningWithDebugPortAsync();
+
+        await _wsLock.WaitAsync();
+        try
+        {
+            var ws = await GetConnectedWebSocketAsync();
+            if (ws == null || ws.State != WebSocketState.Open)
+                return false;
+
+            int msgId = System.Threading.Interlocked.Increment(ref _nextMessageId);
             var payload = new
             {
-                id = 1,
+                id = msgId,
                 method = "Runtime.evaluate",
                 @params = new
                 {
@@ -154,6 +193,7 @@ public static class DeezerCdpService
 
             string requestJson = JsonSerializer.Serialize(payload);
             byte[] bytes = Encoding.UTF8.GetBytes(requestJson);
+            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
             await ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, cts.Token);
 
             using var ms = new MemoryStream();
@@ -165,54 +205,36 @@ public static class DeezerCdpService
                 ms.Write(buffer, 0, result.Count);
             } while (!result.EndOfMessage);
 
-            string responseJson = Encoding.UTF8.GetString(ms.ToArray());
-
-            Logger.Info($"CDP Evaluation result: {responseJson}");
-            await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", CancellationToken.None);
             return true;
         }
         catch (Exception ex)
         {
-            Logger.Error(ex, "Error executing JS expression via CDP");
+            Logger.Warn($"Error executing JS via persistent WebSocket: {ex.Message}. Resetting connection.");
+            _persistentWs?.Dispose();
+            _persistentWs = null;
             return false;
+        }
+        finally
+        {
+            _wsLock.Release();
         }
     }
 
     public static async Task<string?> EvaluateJsAndReturnStringAsync(string jsExpression)
     {
-        if (!await IsCdpAvailableAsync())
-            return null;
+        await EnsureDeezerRunningWithDebugPortAsync();
 
+        await _wsLock.WaitAsync();
         try
         {
-            string json = await HttpClient.GetStringAsync($"http://localhost:{DebugPort}/json");
-            using var doc = JsonDocument.Parse(json);
-            
-            string? wsUrl = null;
-            foreach (var elem in doc.RootElement.EnumerateArray())
-            {
-                string url = elem.TryGetProperty("url", out var u) ? u.GetString() ?? "" : "";
-                string type = elem.TryGetProperty("type", out var t) ? t.GetString() ?? "" : "";
-                if (type == "page" && url.Contains("index.html"))
-                {
-                    if (elem.TryGetProperty("webSocketDebuggerUrl", out var wsProp))
-                    {
-                        wsUrl = wsProp.GetString();
-                        break;
-                    }
-                }
-            }
-
-            if (string.IsNullOrEmpty(wsUrl))
+            var ws = await GetConnectedWebSocketAsync();
+            if (ws == null || ws.State != WebSocketState.Open)
                 return null;
 
-            using var ws = new ClientWebSocket();
-            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            await ws.ConnectAsync(new Uri(wsUrl), cts.Token);
-
+            int msgId = System.Threading.Interlocked.Increment(ref _nextMessageId);
             var payload = new
             {
-                id = 1,
+                id = msgId,
                 method = "Runtime.evaluate",
                 @params = new
                 {
@@ -224,6 +246,7 @@ public static class DeezerCdpService
 
             string requestJson = JsonSerializer.Serialize(payload);
             byte[] bytes = Encoding.UTF8.GetBytes(requestJson);
+            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
             await ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, cts.Token);
 
             using var ms = new MemoryStream();
@@ -236,8 +259,6 @@ public static class DeezerCdpService
             } while (!result.EndOfMessage);
 
             string responseJson = Encoding.UTF8.GetString(ms.ToArray());
-
-            await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", CancellationToken.None);
 
             using var resDoc = JsonDocument.Parse(responseJson);
             if (resDoc.RootElement.TryGetProperty("result", out var resObj) &&
@@ -253,8 +274,14 @@ public static class DeezerCdpService
         }
         catch (Exception ex)
         {
-            Logger.Error(ex, "Error evaluating JS expression returning string");
+            Logger.Warn($"Error evaluating JS via persistent WebSocket: {ex.Message}. Resetting connection.");
+            _persistentWs?.Dispose();
+            _persistentWs = null;
             return null;
+        }
+        finally
+        {
+            _wsLock.Release();
         }
     }
 
