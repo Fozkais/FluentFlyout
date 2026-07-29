@@ -136,16 +136,29 @@ public partial class QueueWindow : MicaWindow
         // Apply any active search filter
         ApplyFilter();
 
-        // Auto-scroll to current track
+        // Smooth Auto-scroll to current track with 0 delay
         int currentIdx = _fullQueue.FindIndex(t => t.IsCurrent);
         if (currentIdx >= 0)
         {
-            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () =>
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () =>
             {
                 try
                 {
-                    var activeItem = _fullQueue[currentIdx];
-                    QueueListView.ScrollIntoView(activeItem);
+                    var scrollViewer = FindVisualChild<ScrollViewer>(QueueListView);
+                    if (scrollViewer != null)
+                    {
+                        double itemHeight = 44.0;
+                        double targetOffset = (currentIdx * itemHeight) - (scrollViewer.ViewportHeight / 2) + (itemHeight / 2);
+                        if (targetOffset < 0) targetOffset = 0;
+                        if (targetOffset > scrollViewer.ScrollableHeight) targetOffset = scrollViewer.ScrollableHeight;
+                        
+                        SmoothScrollToOffset(scrollViewer, targetOffset);
+                    }
+                    else
+                    {
+                        var activeItem = _fullQueue[currentIdx];
+                        QueueListView.ScrollIntoView(activeItem);
+                    }
                 }
                 catch { }
             });
@@ -157,6 +170,40 @@ public partial class QueueWindow : MicaWindow
         ContextLabel.Text = string.IsNullOrEmpty(_contextSource)
             ? $"[{modeStr}]"
             : $"Source : {_contextSource}  •  [{modeStr}]";
+    }
+
+    private static void SmoothScrollToOffset(ScrollViewer scrollViewer, double targetOffset)
+    {
+        if (scrollViewer == null) return;
+        double startOffset = scrollViewer.VerticalOffset;
+        if (Math.Abs(startOffset - targetOffset) < 2)
+        {
+            scrollViewer.ScrollToVerticalOffset(targetOffset);
+            return;
+        }
+
+        int steps = 15;
+        int currentStep = 0;
+        var timer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(12)
+        };
+
+        timer.Tick += (s, e) =>
+        {
+            currentStep++;
+            double progress = (double)currentStep / steps;
+            double ease = 1.0 - Math.Pow(1.0 - progress, 3); // Cubic ease out
+            double currentOffset = startOffset + (targetOffset - startOffset) * ease;
+            scrollViewer.ScrollToVerticalOffset(currentOffset);
+
+            if (currentStep >= steps)
+            {
+                timer.Stop();
+                scrollViewer.ScrollToVerticalOffset(targetOffset);
+            }
+        };
+        timer.Start();
     }
 
     private void SearchToggleButton_Click(object sender, RoutedEventArgs e)
@@ -183,6 +230,7 @@ public partial class QueueWindow : MicaWindow
         string query = SearchTextBox.Text?.Trim().ToLowerInvariant() ?? "";
         if (string.IsNullOrEmpty(query))
         {
+            QueueListView.ItemsSource = null;
             QueueListView.ItemsSource = _fullQueue;
         }
         else
@@ -205,11 +253,26 @@ public partial class QueueWindow : MicaWindow
     {
         if (sender is FrameworkElement fe && fe.DataContext is DeezerTrack track)
         {
-            bool success = await DeezerCdpService.RemoveTrackAsync(track.TargetIndex);
+            // 1. Instant 0ms visual removal from list
+            int idx = _fullQueue.IndexOf(track);
+            int targetIndexToRemove = track.TargetIndex;
+
+            if (idx >= 0)
+            {
+                _fullQueue.RemoveAt(idx);
+                // Re-index remaining target indices
+                for (int i = 0; i < _fullQueue.Count; i++)
+                {
+                    _fullQueue[i].TargetIndex = i;
+                }
+                ApplyFilter();
+            }
+
+            // 2. Perform CDP removal asynchronously in background
+            bool success = await DeezerCdpService.RemoveTrackAsync(targetIndexToRemove);
             if (success)
             {
                 DeezerService.ClearCache();
-                LoadQueue("", "");
             }
         }
     }
@@ -251,51 +314,77 @@ public partial class QueueWindow : MicaWindow
     }
 
     // Drag & Drop Reordering
-    private void QueueListView_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    private DeezerTrack? _draggedTrack;
+
+    private void QueueItem_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        _dragStartPoint = e.GetPosition(null);
+        if (sender is FrameworkElement fe && fe.DataContext is DeezerTrack track)
+        {
+            _dragStartPoint = e.GetPosition(null);
+            _draggedTrack = track;
+        }
     }
 
-    private void QueueListView_MouseMove(object sender, MouseEventArgs e)
+    private void QueueItem_MouseMove(object sender, MouseEventArgs e)
     {
-        if (e.LeftButton != MouseButtonState.Pressed) return;
+        if (e.LeftButton != MouseButtonState.Pressed || _draggedTrack == null) return;
 
         Vector diff = _dragStartPoint - e.GetPosition(null);
         if (Math.Abs(diff.X) > SystemParameters.MinimumHorizontalDragDistance ||
             Math.Abs(diff.Y) > SystemParameters.MinimumVerticalDragDistance)
         {
-            var listView = sender as ListView;
-            var listViewItem = FindAncestor<ListViewItem>((DependencyObject)e.OriginalSource);
-            if (listViewItem == null) return;
+            var dataObj = new DataObject("DeezerTrack", _draggedTrack);
+            DragDrop.DoDragDrop((DependencyObject)sender, dataObj, DragDropEffects.Move);
+            _draggedTrack = null;
+        }
+    }
 
-            var draggedTrack = (DeezerTrack)listView.ItemContainerGenerator.ItemFromContainer(listViewItem);
-            if (draggedTrack == null) return;
-
-            DragDrop.DoDragDrop(listViewItem, draggedTrack, DragDropEffects.Move);
+    private void QueueListView_DragOver(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent("DeezerTrack"))
+        {
+            e.Effects = DragDropEffects.Move;
+            e.Handled = true;
+        }
+        else
+        {
+            e.Effects = DragDropEffects.None;
         }
     }
 
     private async void QueueListView_Drop(object sender, DragEventArgs e)
     {
-        if (!e.Data.GetDataPresent(typeof(DeezerTrack))) return;
+        if (!e.Data.GetDataPresent("DeezerTrack")) return;
 
-        var droppedTrack = (DeezerTrack)e.Data.GetData(typeof(DeezerTrack));
+        var droppedTrack = e.Data.GetData("DeezerTrack") as DeezerTrack;
+        if (droppedTrack == null) return;
+
         var targetItem = FindAncestor<ListViewItem>((DependencyObject)e.OriginalSource);
-        if (targetItem == null) return;
+        if (targetItem == null || targetItem.DataContext is not DeezerTrack targetTrack) return;
 
-        var targetTrack = (DeezerTrack)QueueListView.ItemContainerGenerator.ItemFromContainer(targetItem);
-        if (targetTrack == null || droppedTrack == targetTrack) return;
+        if (droppedTrack == targetTrack) return;
 
-        int fromIndex = droppedTrack.TargetIndex;
-        int toIndex = targetTrack.TargetIndex;
+        int fromIndex = _fullQueue.IndexOf(droppedTrack);
+        int toIndex = _fullQueue.IndexOf(targetTrack);
 
         if (fromIndex >= 0 && toIndex >= 0)
         {
+            // 1. Instant 0ms visual reorder in WPF UI
+            _fullQueue.RemoveAt(fromIndex);
+            _fullQueue.Insert(toIndex, droppedTrack);
+
+            for (int i = 0; i < _fullQueue.Count; i++)
+            {
+                _fullQueue[i].TargetIndex = i;
+            }
+
+            ApplyFilter();
+
+            // 2. Perform CDP reorder asynchronously in background
             bool success = await DeezerCdpService.MoveTrackAsync(fromIndex, toIndex);
             if (success)
             {
                 DeezerService.ClearCache();
-                LoadQueue("", "");
             }
         }
     }
@@ -307,6 +396,21 @@ public partial class QueueWindow : MicaWindow
             if (current is T ancestor) return ancestor;
             current = System.Windows.Media.VisualTreeHelper.GetParent(current);
         } while (current != null);
+        return null;
+    }
+
+    private static T? FindVisualChild<T>(DependencyObject obj) where T : DependencyObject
+    {
+        if (obj == null) return null;
+        for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(obj); i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(obj, i);
+            if (child is T t)
+                return t;
+            var childOfChild = FindVisualChild<T>(child);
+            if (childOfChild != null)
+                return childOfChild;
+        }
         return null;
     }
 

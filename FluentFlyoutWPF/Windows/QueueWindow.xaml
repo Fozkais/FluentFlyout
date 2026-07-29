@@ -55,8 +55,7 @@
                       BorderThickness="0"
                       Padding="0"
                       AllowDrop="True"
-                      PreviewMouseLeftButtonDown="QueueListView_PreviewMouseLeftButtonDown"
-                      MouseMove="QueueListView_MouseMove"
+                      DragOver="QueueListView_DragOver"
                       Drop="QueueListView_Drop">
                 <ListView.ItemContainerStyle>
                     <Style TargetType="ListViewItem">
@@ -76,7 +75,10 @@
 
                 <ListView.ItemTemplate>
                     <DataTemplate>
-                        <Border x:Name="ItemBorder" CornerRadius="6" Padding="6,4" Margin="0,1">
+                        <Border x:Name="ItemBorder" CornerRadius="6" Padding="6,4" Margin="0,1"
+                                Cursor="Hand"
+                                PreviewMouseLeftButtonDown="QueueItem_PreviewMouseLeftButtonDown"
+                                MouseMove="QueueItem_MouseMove">
                             <Border.Style>
                                 <Style TargetType="Border">
                                     <Setter Property="Background" Value="Transparent"/>
