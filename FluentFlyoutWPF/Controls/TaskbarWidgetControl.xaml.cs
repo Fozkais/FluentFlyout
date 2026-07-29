@@ -489,15 +489,18 @@ public partial class TaskbarWidgetControl : UserControl
         // adjust UI based on available controls
         Dispatcher.Invoke(() =>
         {
-            if (SettingsManager.Current.TaskbarWidgetControlsEnabled && playbackControls != null)
+            if (SettingsManager.Current.TaskbarWidgetControlsEnabled)
             {
-                PreviousButton.IsHitTestVisible = playbackControls.IsPreviousEnabled;
-                PlayPauseButton.IsHitTestVisible = playbackControls.IsPauseEnabled || playbackControls.IsPlayEnabled;
-                NextButton.IsHitTestVisible = playbackControls.IsNextEnabled;
+                bool isPrevEnabled = playbackControls?.IsPreviousEnabled ?? true;
+                bool isNextEnabled = playbackControls?.IsNextEnabled ?? true;
 
-                PreviousButton.Opacity = playbackControls.IsPreviousEnabled ? 1 : 0.5;
-                PlayPauseButton.Opacity = (playbackControls.IsPauseEnabled || playbackControls.IsPlayEnabled) ? 1 : 0.5;
-                NextButton.Opacity = playbackControls.IsNextEnabled ? 1 : 0.5;
+                PreviousButton.IsHitTestVisible = isPrevEnabled;
+                PlayPauseButton.IsHitTestVisible = true; // Always allow Play/Pause button to resume playback when paused!
+                NextButton.IsHitTestVisible = isNextEnabled;
+
+                PreviousButton.Opacity = isPrevEnabled ? 1 : 0.5;
+                PlayPauseButton.Opacity = 1;
+                NextButton.Opacity = isNextEnabled ? 1 : 0.5;
             }
             else
             {

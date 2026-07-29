@@ -14,6 +14,7 @@
       TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal"
       FontFamily="{Binding FontFamily}"
       FlowDirection="{Binding FlowDirection}"
+      PreviewMouseLeftButtonUp="QueueWindow_PreviewMouseLeftButtonUp"
       d:DataContext="{d:DesignInstance viewModels:UserSettings}">
 
     <Grid Margin="12">

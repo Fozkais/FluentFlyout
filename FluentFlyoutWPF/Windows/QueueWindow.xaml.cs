@@ -317,8 +317,21 @@ public partial class QueueWindow : MicaWindow
     private Point _dragStartPointInList;
     private DeezerTrack? _draggedTrackItem;
 
+    private static bool IsDescendantOfButton(DependencyObject? obj)
+    {
+        while (obj != null)
+        {
+            if (obj is System.Windows.Controls.Primitives.ButtonBase || obj is Wpf.Ui.Controls.Button)
+                return true;
+            obj = System.Windows.Media.VisualTreeHelper.GetParent(obj);
+        }
+        return false;
+    }
+
     private void QueueItem_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        if (IsDescendantOfButton(e.OriginalSource as DependencyObject)) return;
+
         if (sender is Border border && border.DataContext is DeezerTrack track)
         {
             _dragStartPointInList = e.GetPosition(QueueListView);
@@ -351,23 +364,28 @@ public partial class QueueWindow : MicaWindow
         }
     }
 
+    private void QueueWindow_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        QueueItem_PreviewMouseLeftButtonUp(sender, e);
+    }
+
     private async void QueueItem_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
         if (_draggedBorder != null)
         {
-            if (_draggedBorder.IsMouseCaptured)
-            {
-                _draggedBorder.ReleaseMouseCapture();
-            }
-            _draggedBorder.Opacity = 1.0;
-            Panel.SetZIndex(_draggedBorder, 0);
+            var border = _draggedBorder;
+            var transform = _draggedTransform;
+            var trackItem = _draggedTrackItem;
+            bool wasDragging = _isDraggingItem;
 
-            if (_isDraggingItem && _draggedTrackItem != null && _draggedTransform != null)
-            {
-                double finalDeltaY = _draggedTransform.Y;
-                _draggedTransform.Y = 0; // Reset transform
+            ResetDragState();
 
-                int fromIndex = _fullQueue.IndexOf(_draggedTrackItem);
+            if (wasDragging && trackItem != null && transform != null)
+            {
+                double finalDeltaY = transform.Y;
+                transform.Y = 0; // Reset transform
+
+                int fromIndex = _fullQueue.IndexOf(trackItem);
                 int shiftIndices = (int)Math.Round(finalDeltaY / 44.0); // 44px item row height
                 int toIndex = Math.Clamp(fromIndex + shiftIndices, 0, _fullQueue.Count - 1);
 
@@ -375,7 +393,7 @@ public partial class QueueWindow : MicaWindow
                 {
                     // 1. Instant 0ms visual reorder in WPF UI
                     _fullQueue.RemoveAt(fromIndex);
-                    _fullQueue.Insert(toIndex, _draggedTrackItem);
+                    _fullQueue.Insert(toIndex, trackItem);
 
                     for (int i = 0; i < _fullQueue.Count; i++)
                     {
@@ -389,12 +407,30 @@ public partial class QueueWindow : MicaWindow
                     await DeezerCdpService.MoveTrackAsync(fromIndex, toIndex);
                 }
             }
-
-            _isDraggingItem = false;
-            _draggedBorder = null;
-            _draggedTransform = null;
-            _draggedTrackItem = null;
         }
+    }
+
+    private void ResetDragState()
+    {
+        if (_draggedBorder != null)
+        {
+            if (_draggedBorder.IsMouseCaptured)
+            {
+                try { _draggedBorder.ReleaseMouseCapture(); } catch { }
+            }
+            _draggedBorder.Opacity = 1.0;
+            Panel.SetZIndex(_draggedBorder, 0);
+        }
+
+        if (_draggedTransform != null)
+        {
+            _draggedTransform.Y = 0;
+        }
+
+        _isDraggingItem = false;
+        _draggedBorder = null;
+        _draggedTransform = null;
+        _draggedTrackItem = null;
     }
 
     private static T? FindAncestor<T>(DependencyObject current) where T : DependencyObject
