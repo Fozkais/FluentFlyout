@@ -50,17 +50,32 @@ public static class DeezerService
     /// <summary>Human-readable description of where the queue was resolved from.</summary>
     public static string LastQueueSource { get; private set; } = string.Empty;
 
+    private static DateTime _lastCacheTime = DateTime.MinValue;
+
     public static List<DeezerTrack> CachedQueue => _cachedQueue;
+
+    public static void UpdateCache(List<DeezerTrack> tracks)
+    {
+        _cachedQueue = new List<DeezerTrack>(tracks);
+        _lastCacheTime = DateTime.UtcNow;
+    }
 
     public static void ClearCache()
     {
         _cachedQueue = [];
         _lastSearchKey = string.Empty;
         LastQueueSource = string.Empty;
+        _lastCacheTime = DateTime.MinValue;
     }
 
     public static async Task<List<DeezerTrack>> GetQueueAsync(string currentTitle, string currentArtist)
     {
+        // If cache was updated recently (e.g. after reordering/deleting), return cached queue immediately
+        if (_cachedQueue.Count > 0 && (DateTime.UtcNow - _lastCacheTime).TotalSeconds < 15)
+        {
+            return _cachedQueue;
+        }
+
         if (await DeezerCdpService.IsCdpAvailableAsync())
         {
             var cdpQueue = await DeezerCdpService.GetQueueFromCdpAsync();
@@ -68,6 +83,7 @@ public static class DeezerService
             {
                 LastQueueSource = "Lecteur Deezer";
                 _cachedQueue = cdpQueue;
+                _lastCacheTime = DateTime.UtcNow;
                 return cdpQueue;
             }
         }

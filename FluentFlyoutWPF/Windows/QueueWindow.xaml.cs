@@ -266,14 +266,11 @@ public partial class QueueWindow : MicaWindow
                     _fullQueue[i].TargetIndex = i;
                 }
                 ApplyFilter();
+                DeezerService.UpdateCache(_fullQueue);
             }
 
             // 2. Perform CDP removal asynchronously in background
-            bool success = await DeezerCdpService.RemoveTrackAsync(targetIndexToRemove);
-            if (success)
-            {
-                DeezerService.ClearCache();
-            }
+            await DeezerCdpService.RemoveTrackAsync(targetIndexToRemove);
         }
     }
 
@@ -293,7 +290,7 @@ public partial class QueueWindow : MicaWindow
         if (cdpSuccess)
         {
             await Task.Delay(50);
-            DeezerService.ClearCache();
+            DeezerService.UpdateCache(_fullQueue);
             if (SettingsManager.Current.QueueCloseOnTrackClick)
             {
                 CloseWithAnimation();
@@ -313,7 +310,7 @@ public partial class QueueWindow : MicaWindow
         }
     }
 
-    // Drag & Drop Reordering
+    // Drag & Drop Reordering with Visual Ghost Card
     private DeezerTrack? _draggedTrack;
 
     private void QueueItem_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -333,8 +330,25 @@ public partial class QueueWindow : MicaWindow
         if (Math.Abs(diff.X) > SystemParameters.MinimumHorizontalDragDistance ||
             Math.Abs(diff.Y) > SystemParameters.MinimumVerticalDragDistance)
         {
+            // Populate floating drag ghost card
+            if (!string.IsNullOrEmpty(_draggedTrack.CoverUrl))
+            {
+                try { DragGhostCover.Source = new System.Windows.Media.Imaging.BitmapImage(new Uri(_draggedTrack.CoverUrl)); } catch { }
+            }
+            DragGhostTitle.Text = _draggedTrack.Title;
+            DragGhostArtist.Text = _draggedTrack.Artist;
+
+            Point mousePos = e.GetPosition(this);
+            Point screenPos = PointToScreen(mousePos);
+            DragGhostPopup.HorizontalOffset = screenPos.X + 12;
+            DragGhostPopup.VerticalOffset = screenPos.Y + 12;
+            DragGhostPopup.IsOpen = true;
+
             var dataObj = new DataObject("DeezerTrack", _draggedTrack);
             DragDrop.DoDragDrop((DependencyObject)sender, dataObj, DragDropEffects.Move);
+
+            // Hide ghost after drag ends
+            DragGhostPopup.IsOpen = false;
             _draggedTrack = null;
         }
     }
@@ -345,6 +359,12 @@ public partial class QueueWindow : MicaWindow
         {
             e.Effects = DragDropEffects.Move;
             e.Handled = true;
+
+            // Move visual floating ghost card with mouse
+            Point mousePos = e.GetPosition(this);
+            Point screenPos = PointToScreen(mousePos);
+            DragGhostPopup.HorizontalOffset = screenPos.X + 12;
+            DragGhostPopup.VerticalOffset = screenPos.Y + 12;
         }
         else
         {
@@ -354,6 +374,7 @@ public partial class QueueWindow : MicaWindow
 
     private async void QueueListView_Drop(object sender, DragEventArgs e)
     {
+        DragGhostPopup.IsOpen = false;
         if (!e.Data.GetDataPresent("DeezerTrack")) return;
 
         var droppedTrack = e.Data.GetData("DeezerTrack") as DeezerTrack;
@@ -379,13 +400,10 @@ public partial class QueueWindow : MicaWindow
             }
 
             ApplyFilter();
+            DeezerService.UpdateCache(_fullQueue);
 
             // 2. Perform CDP reorder asynchronously in background
-            bool success = await DeezerCdpService.MoveTrackAsync(fromIndex, toIndex);
-            if (success)
-            {
-                DeezerService.ClearCache();
-            }
+            await DeezerCdpService.MoveTrackAsync(fromIndex, toIndex);
         }
     }
 

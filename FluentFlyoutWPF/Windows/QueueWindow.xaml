@@ -160,5 +160,31 @@
                 <ui:Button Name="AuthButton" Content="Se connecter à Deezer" Appearance="Primary" HorizontalAlignment="Right" Click="AuthButton_Click"/>
             </Grid>
         </Border>
+
+        <!-- Floating Drag Preview Ghost -->
+        <Popup Name="DragGhostPopup" IsOpen="False" AllowsTransparency="True" IsHitTestVisible="False" Placement="Absolute">
+            <Border x:Name="DragGhostBorder" CornerRadius="8" Padding="8,6" Width="280"
+                    Background="{DynamicResource MicaWPF.Brushes.ControlFillColorTertiary}"
+                    BorderBrush="{DynamicResource MicaWPF.Brushes.SystemAccentColorPrimary}"
+                    BorderThickness="1.5"
+                    Opacity="0.92">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="12" ShadowDepth="4" Opacity="0.35"/>
+                </Border.Effect>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="36"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" CornerRadius="4" ClipToBounds="True" Width="36" Height="36">
+                        <Image Name="DragGhostCover" Stretch="UniformToFill"/>
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="10,0,0,0">
+                        <TextBlock Name="DragGhostTitle" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Name="DragGhostArtist" FontSize="11" Opacity="0.7" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Popup>
     </Grid>
 </controls:MicaWindow>
