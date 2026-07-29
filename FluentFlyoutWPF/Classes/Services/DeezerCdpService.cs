@@ -515,120 +515,75 @@ public static class DeezerCdpService
     }
 
     private static readonly HttpClient _httpClient = new HttpClient();
+    private static string? _cachedUserId;
 
     // Playlist Selector CDP API
     public static async Task<List<DeezerPlaylist>> GetUserPlaylistsAsync()
     {
         var list = new List<DeezerPlaylist>();
 
-        string js = @"(async function() {
-            try {
-                let userId = '';
-
+        if (string.IsNullOrEmpty(_cachedUserId))
+        {
+            string getUserIdJs = @"(function() {
                 if (window.location && window.location.href) {
                     const m = window.location.href.match(/\/profile\/(\d+)/);
-                    if (m) userId = m[1];
+                    if (m) return m[1];
                 }
-
-                if (!userId) {
-                    const links = Array.from(document.querySelectorAll('a[href*=""/profile/""]'));
-                    for (const a of links) {
-                        const m = a.href.match(/\/profile\/(\d+)/);
-                        if (m) { userId = m[1]; break; }
-                    }
+                const links = Array.from(document.querySelectorAll('a[href*=""/profile/""]'));
+                for (const a of links) {
+                    const m = a.href.match(/\/profile\/(\d+)/);
+                    if (m) return m[1];
                 }
-
-                if (!userId && typeof localStorage !== 'undefined') {
+                if (typeof localStorage !== 'undefined') {
                     for (let i = 0; i < localStorage.length; i++) {
                         const key = localStorage.key(i);
                         const m = key ? key.match(/_(\d{8,})/) : null;
-                        if (m) { userId = m[1]; break; }
+                        if (m) return m[1];
                     }
                 }
+                return '';
+            })()";
 
-                if (userId) {
-                    const resp = await fetch('https://api.deezer.com/user/' + userId + '/playlists?limit=50');
-                    if (resp.ok) {
-                        const resJson = await resp.json();
-                        if (resJson && resJson.data && Array.isArray(resJson.data)) {
-                            return JSON.stringify(resJson.data.map(p => ({
-                                id: p.id,
-                                title: p.title,
-                                picture: p.picture_medium || p.picture || p.cover || '',
-                                tracks: p.nb_tracks || 0
-                            })));
-                        }
-                    }
-                }
-            } catch(e) {}
-            return '[]';
-        })()";
-
-        string? json = await EvaluateJsAndReturnStringAsync(js);
-        if (!string.IsNullOrEmpty(json) && json != "[]")
-        {
-            list = ParsePlaylistsJson(json);
+            string? userId = await EvaluateJsAndReturnStringAsync(getUserIdJs);
+            userId = userId?.Trim('"', ' ', '\r', '\n');
+            if (!string.IsNullOrEmpty(userId) && userId.Length >= 5)
+            {
+                _cachedUserId = userId;
+            }
         }
 
-        // Failsafe Method: If list is still empty, query profile ID via C# HttpClient
-        if (list.Count == 0)
+        if (!string.IsNullOrEmpty(_cachedUserId))
         {
             try
             {
-                string getUserIdJs = @"(function() {
-                    if (window.location && window.location.href) {
-                        const m = window.location.href.match(/\/profile\/(\d+)/);
-                        if (m) return m[1];
-                    }
-                    const links = Array.from(document.querySelectorAll('a[href*=""/profile/""]'));
-                    for (const a of links) {
-                        const m = a.href.match(/\/profile\/(\d+)/);
-                        if (m) return m[1];
-                    }
-                    if (typeof localStorage !== 'undefined') {
-                        for (let i = 0; i < localStorage.length; i++) {
-                            const key = localStorage.key(i);
-                            const m = key ? key.match(/_(\d{8,})/) : null;
-                            if (m) return m[1];
-                        }
-                    }
-                    return '';
-                })()";
-
-                string? userId = await EvaluateJsAndReturnStringAsync(getUserIdJs);
-                userId = userId?.Trim('"', ' ', '\r', '\n');
-
-                if (!string.IsNullOrEmpty(userId))
+                string apiUrl = $"https://api.deezer.com/user/{_cachedUserId}/playlists?limit=50";
+                string apiResponse = await _httpClient.GetStringAsync(apiUrl);
+                using var doc = JsonDocument.Parse(apiResponse);
+                if (doc.RootElement.TryGetProperty("data", out var dataArr) && dataArr.ValueKind == JsonValueKind.Array)
                 {
-                    string apiUrl = $"https://api.deezer.com/user/{userId}/playlists?limit=50";
-                    string apiResponse = await _httpClient.GetStringAsync(apiUrl);
-                    using var doc = JsonDocument.Parse(apiResponse);
-                    if (doc.RootElement.TryGetProperty("data", out var dataArr) && dataArr.ValueKind == JsonValueKind.Array)
+                    foreach (var item in dataArr.EnumerateArray())
                     {
-                        foreach (var item in dataArr.EnumerateArray())
-                        {
-                            long id = GetLongSafe(item, "id");
-                            string title = item.TryGetProperty("title", out var titleProp) ? titleProp.GetString() ?? "" : "";
-                            string pic = item.TryGetProperty("picture_medium", out var picProp) ? picProp.GetString() ?? "" : "";
-                            int count = GetIntSafe(item, "nb_tracks");
+                        long id = GetLongSafe(item, "id");
+                        string title = item.TryGetProperty("title", out var titleProp) ? titleProp.GetString() ?? "" : "";
+                        string pic = item.TryGetProperty("picture_medium", out var picProp) ? picProp.GetString() ?? "" : "";
+                        int count = GetIntSafe(item, "nb_tracks");
 
-                            if (id > 0)
+                        if (id > 0)
+                        {
+                            list.Add(new DeezerPlaylist
                             {
-                                list.Add(new DeezerPlaylist
-                                {
-                                    Id = id,
-                                    Title = title,
-                                    CoverUrl = string.IsNullOrEmpty(pic) ? "https://e-cdns-images.dzcdn.net/images/cover/250x250-000000-80-0-0.jpg" : pic,
-                                    TrackCount = count
-                                });
-                            }
+                                Id = id,
+                                Title = title,
+                                CoverUrl = string.IsNullOrEmpty(pic) ? "https://e-cdns-images.dzcdn.net/images/cover/250x250-000000-80-0-0.jpg" : pic,
+                                TrackCount = count
+                            });
                         }
                     }
                 }
             }
             catch (Exception ex)
             {
-                Logger.Error(ex, "Error fetching user playlists via C# HttpClient fallback");
+                Logger.Error(ex, $"Error fetching user playlists via C# HttpClient for {_cachedUserId}");
             }
         }
 
@@ -673,32 +628,55 @@ public static class DeezerCdpService
 
     public static async Task<bool> PlayPlaylistAsync(long playlistId)
     {
-        string js = $@"(async function() {{
-            try {{
-                const resp = await fetch('https://api.deezer.com/playlist/{playlistId}/tracks?limit=200');
-                if (resp.ok) {{
-                    const json = await resp.json();
-                    if (json.data && Array.isArray(json.data) && json.data.length > 0) {{
-                        const sngIds = json.data.map(t => String(t.id));
+        try
+        {
+            string apiUrl = $"https://api.deezer.com/playlist/{playlistId}/tracks?limit=200";
+            string apiResponse = await _httpClient.GetStringAsync(apiUrl);
+            using var doc = JsonDocument.Parse(apiResponse);
+            var trackIds = new List<string>();
+            if (doc.RootElement.TryGetProperty("data", out var dataArr) && dataArr.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in dataArr.EnumerateArray())
+                {
+                    long id = GetLongSafe(item, "id");
+                    if (id > 0) trackIds.Add(id.ToString());
+                }
+            }
+
+            if (trackIds.Count > 0)
+            {
+                string idsJson = JsonSerializer.Serialize(trackIds);
+                string playJs = $@"(function() {{
+                    try {{
                         if (window.dzPlayer && typeof window.dzPlayer.play === 'function') {{
-                            window.dzPlayer.play({{ type: 'tracks', ids: sngIds }});
+                            window.dzPlayer.play({{ type: 'tracks', ids: {idsJson} }});
                             if (window.dzPlayer.control && typeof window.dzPlayer.control.play === 'function') {{
                                 window.dzPlayer.control.play();
                             }}
-                            return 'played';
+                            return true;
                         }}
-                    }}
+                    }} catch(e) {{}}
+                    return false;
+                }})()";
+
+                return await ExecuteJsAsync(playJs);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, $"Error fetching playlist {playlistId} tracks via HttpClient");
+        }
+
+        string fallbackJs = $@"(function() {{
+            try {{
+                if (window.dzPlayer && typeof window.dzPlayer.play === 'function') {{
+                    window.dzPlayer.play({{ type: 'playlist', id: '{playlistId}' }});
+                    return true;
                 }}
             }} catch(e) {{}}
-
-            if (window.dzPlayer && typeof window.dzPlayer.play === 'function') {{
-                window.dzPlayer.play({{ type: 'playlist', id: '{playlistId}' }});
-                return 'played_fallback';
-            }}
-            return 'error';
+            return false;
         }})()";
-
-        return await ExecuteJsAsync(js);
+        return await ExecuteJsAsync(fallbackJs);
     }
 
     /// <summary>
