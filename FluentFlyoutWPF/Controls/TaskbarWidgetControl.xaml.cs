@@ -622,15 +622,11 @@ public partial class TaskbarWidgetControl : UserControl
         var session = _mainWindow?.GetActiveMediaSession();
         string appId = session?.ControlSession?.SourceAppUserModelId ?? "";
         bool isDeezer = appId.Contains("deezer", StringComparison.OrdinalIgnoreCase);
-        bool isCdpAvailable = false;
-        if (isDeezer)
-        {
-            isCdpAvailable = await DeezerCdpService.IsCdpAvailableAsync();
-        }
+        bool isCdpAvailable = await DeezerCdpService.IsCdpAvailableAsync();
 
         Dispatcher.Invoke(() =>
         {
-            QueueButton.Visibility = (isDeezer && isCdpAvailable) ? Visibility.Visible : Visibility.Collapsed;
+            QueueButton.Visibility = (isDeezer || isCdpAvailable) ? Visibility.Visible : Visibility.Collapsed;
         });
     }
 
@@ -684,9 +680,16 @@ public partial class TaskbarWidgetControl : UserControl
         if (_mainWindow == null) return;
 
         var focusedSession = _mainWindow.GetActiveMediaSession();
-        if (focusedSession == null) return;
-
-        await focusedSession.ControlSession.TrySkipPreviousAsync();
+        if (focusedSession != null)
+        {
+            await focusedSession.ControlSession.TrySkipPreviousAsync();
+        }
+        else if (SettingsManager.Current.DeezerQueueEnabled && await DeezerCdpService.IsCdpAvailableAsync())
+        {
+            await DeezerCdpService.PrevTrackAsync();
+            await Task.Delay(300);
+            _mainWindow.ForceRefreshTaskbarWidget();
+        }
     }
 
     private async void PlayPause_Click(object sender, RoutedEventArgs e)
@@ -694,9 +697,16 @@ public partial class TaskbarWidgetControl : UserControl
         if (_mainWindow == null) return;
 
         var focusedSession = _mainWindow.GetActiveMediaSession();
-        if (focusedSession == null) return;
-
-        await focusedSession.ControlSession.TryTogglePlayPauseAsync();
+        if (focusedSession != null)
+        {
+            await focusedSession.ControlSession.TryTogglePlayPauseAsync();
+        }
+        else if (SettingsManager.Current.DeezerQueueEnabled && await DeezerCdpService.IsCdpAvailableAsync())
+        {
+            await DeezerCdpService.TogglePlayPauseAsync();
+            await Task.Delay(300);
+            _mainWindow.ForceRefreshTaskbarWidget();
+        }
     }
 
     private async void Next_Click(object sender, RoutedEventArgs e)
@@ -704,9 +714,16 @@ public partial class TaskbarWidgetControl : UserControl
         if (_mainWindow == null) return;
 
         var focusedSession = _mainWindow.GetActiveMediaSession();
-        if (focusedSession == null) return;
-
-        await focusedSession.ControlSession.TrySkipNextAsync();
+        if (focusedSession != null)
+        {
+            await focusedSession.ControlSession.TrySkipNextAsync();
+        }
+        else if (SettingsManager.Current.DeezerQueueEnabled && await DeezerCdpService.IsCdpAvailableAsync())
+        {
+            await DeezerCdpService.NextTrackAsync();
+            await Task.Delay(300);
+            _mainWindow.ForceRefreshTaskbarWidget();
+        }
     }
 
     private static QueueWindow? _activeQueueWindow;

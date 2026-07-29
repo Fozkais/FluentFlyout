@@ -66,6 +66,7 @@ public static class DeezerCdpService
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    private const int SW_HIDE = 0;
     private const int SW_MINIMIZE = 6;
 
     public static async Task EnsureDeezerRunningWithDebugPortAsync()
@@ -100,7 +101,7 @@ public static class DeezerCdpService
             };
             Process.Start(psi);
 
-            // Wait up to 3 seconds for CDP port to open
+            // Wait up to 3 seconds for CDP port to open and hide window completely to system tray
             for (int i = 0; i < 20; i++)
             {
                 await Task.Delay(200);
@@ -113,7 +114,7 @@ public static class DeezerCdpService
                         {
                             if (p.MainWindowHandle != IntPtr.Zero)
                             {
-                                ShowWindow(p.MainWindowHandle, SW_MINIMIZE);
+                                ShowWindow(p.MainWindowHandle, SW_HIDE);
                             }
                         }
                     }
@@ -131,7 +132,7 @@ public static class DeezerCdpService
     }
 
     /// <summary>
-    /// Explicitly launches (or restarts if running without debug port) Deezer Desktop with --remote-debugging-port=9222.
+    /// Explicitly launches (or restarts if running without debug port) Deezer Desktop with --remote-debugging-port=9222 in background system tray.
     /// </summary>
     public static async Task LaunchDeezerWithDebugPortAsync(bool forceRestartIfNoCdp = true)
     {
@@ -181,7 +182,7 @@ public static class DeezerCdpService
                         {
                             if (p.MainWindowHandle != IntPtr.Zero)
                             {
-                                ShowWindow(p.MainWindowHandle, SW_MINIMIZE);
+                                ShowWindow(p.MainWindowHandle, SW_HIDE);
                             }
                         }
                     }
@@ -196,6 +197,48 @@ public static class DeezerCdpService
         {
             Logger.Error(ex, "Failed to launch Deezer with remote debugging port");
         }
+    }
+
+    public static async Task<bool> TogglePlayPauseAsync()
+    {
+        string js = @"(function() {
+            try {
+                if (window.dzPlayer) {
+                    if (typeof window.dzPlayer.isPlaying === 'function' && window.dzPlayer.isPlaying()) {
+                        if (window.dzPlayer.control && typeof window.dzPlayer.control.pause === 'function') {
+                            window.dzPlayer.control.pause();
+                            return 'paused';
+                        }
+                    } else {
+                        if (window.dzPlayer.control && typeof window.dzPlayer.control.play === 'function') {
+                            window.dzPlayer.control.play();
+                            return 'playing';
+                        }
+                    }
+                }
+            } catch(e) {}
+            return 'false';
+        })()";
+        return await ExecuteJsAsync(js);
+    }
+
+    public static async Task<bool> NextTrackAsync()
+    {
+        return await SkipTracksAsync(1);
+    }
+
+    public static async Task<bool> PrevTrackAsync()
+    {
+        string js = @"(function() {
+            try {
+                if (window.dzPlayer && window.dzPlayer.control && typeof window.dzPlayer.control.prev === 'function') {
+                    window.dzPlayer.control.prev();
+                    return 'prev';
+                }
+            } catch(e) {}
+            return 'false';
+        })()";
+        return await ExecuteJsAsync(js);
     }
 
     public class DeezerCurrentSong
