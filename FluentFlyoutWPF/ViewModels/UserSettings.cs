@@ -242,6 +242,9 @@ public partial class UserSettings : ObservableObject
     [ObservableProperty]
     public partial bool QueueCloseOnTrackClick { get; set; } = false;
 
+    [ObservableProperty]
+    public partial bool QueuePlaylistSelectorEnabled { get; set; } = true;
+
     /// <summary>
     /// Tray icon left-click behavior
     /// </summary>

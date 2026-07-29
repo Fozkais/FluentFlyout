@@ -446,4 +446,145 @@ public static class DeezerCdpService
 
         return await ExecuteJsAsync(js);
     }
+
+    // CDP Controls for Shuffle and Repeat
+    public static async Task<bool> ToggleShuffleAsync()
+    {
+        string js = @"(function() {
+            if (window.dzPlayer && window.dzPlayer.control) {
+                const cur = typeof window.dzPlayer.control.getShuffle === 'function' ? window.dzPlayer.control.getShuffle() : false;
+                const next = !cur;
+                if (typeof window.dzPlayer.control.setShuffle === 'function') {
+                    window.dzPlayer.control.setShuffle(next);
+                    return next ? 'true' : 'false';
+                }
+            }
+            return 'false';
+        })()";
+        string? res = await EvaluateJsAndReturnStringAsync(js);
+        return res == "true" || res == "\"true\"";
+    }
+
+    public static async Task<int> ToggleRepeatAsync()
+    {
+        string js = @"(function() {
+            if (window.dzPlayer && window.dzPlayer.control) {
+                const cur = typeof window.dzPlayer.control.getRepeat === 'function' ? window.dzPlayer.control.getRepeat() : 0;
+                const next = (cur + 1) % 3;
+                if (typeof window.dzPlayer.control.setRepeat === 'function') {
+                    window.dzPlayer.control.setRepeat(next);
+                    return String(next);
+                }
+            }
+            return '0';
+        })()";
+        string? res = await EvaluateJsAndReturnStringAsync(js);
+        if (int.TryParse(res?.Trim('"', ' '), out int mode)) return mode;
+        return 0;
+    }
+
+    public static async Task<bool> GetShuffleStateAsync()
+    {
+        string js = @"(function() {
+            return window.dzPlayer && window.dzPlayer.control && typeof window.dzPlayer.control.getShuffle === 'function' ? (window.dzPlayer.control.getShuffle() ? 'true' : 'false') : 'false';
+        })()";
+        string? res = await EvaluateJsAndReturnStringAsync(js);
+        return res == "true" || res == "\"true\"";
+    }
+
+    public static async Task<int> GetRepeatStateAsync()
+    {
+        string js = @"(function() {
+            return window.dzPlayer && window.dzPlayer.control && typeof window.dzPlayer.control.getRepeat === 'function' ? String(window.dzPlayer.control.getRepeat()) : '0';
+        })()";
+        string? res = await EvaluateJsAndReturnStringAsync(js);
+        if (int.TryParse(res?.Trim('"', ' '), out int mode)) return mode;
+        return 0;
+    }
+
+    // Playlist Selector CDP API
+    public static async Task<List<DeezerPlaylist>> GetUserPlaylistsAsync()
+    {
+        string js = @"(function() {
+            try {
+                if (window.dzPlayer && window.dzPlayer.getUserData) {
+                    const data = window.dzPlayer.getUserData();
+                    const playlists = data.PLAYLISTS || data.playlists || [];
+                    return JSON.stringify(playlists.map(p => ({
+                        id: p.PLAYLIST_ID || p.id || 0,
+                        title: p.TITLE || p.title || 'Playlist',
+                        picture: p.PICTURE_PATH || p.picture || p.cover || '',
+                        tracks: p.NB_SONGS || p.nb_tracks || p.tracks || 0
+                    })));
+                }
+            } catch(e) {}
+            return '[]';
+        })()";
+
+        string? json = await EvaluateJsAndReturnStringAsync(js);
+        var list = new List<DeezerPlaylist>();
+        if (string.IsNullOrEmpty(json) || json == "[]") return list;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            foreach (var item in doc.RootElement.EnumerateArray())
+            {
+                long id = item.TryGetProperty("id", out var idProp) ? idProp.GetInt64() : 0;
+                string title = item.TryGetProperty("title", out var titleProp) ? titleProp.GetString() ?? "" : "";
+                string pic = item.TryGetProperty("picture", out var picProp) ? picProp.GetString() ?? "" : "";
+                int count = item.TryGetProperty("tracks", out var countProp) ? countProp.GetInt32() : 0;
+
+                string coverUrl = string.IsNullOrEmpty(pic)
+                    ? "https://e-cdns-images.dzcdn.net/images/cover/250x250-000000-80-0-0.jpg"
+                    : (pic.StartsWith("http") ? pic : $"https://e-cdns-images.dzcdn.net/images/cover/{pic}/250x250-000000-80-0-0.jpg");
+
+                if (id > 0)
+                {
+                    list.Add(new DeezerPlaylist
+                    {
+                        Id = id,
+                        Title = title,
+                        CoverUrl = coverUrl,
+                        TrackCount = count
+                    });
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Error parsing user playlists JSON from CDP");
+        }
+
+        return list;
+    }
+
+    public static async Task<bool> PlayPlaylistAsync(long playlistId)
+    {
+        string js = $@"(function() {{
+            try {{
+                if (window.dzPlayer) {{
+                    if (typeof window.dzPlayer.playPlaylist === 'function') {{
+                        window.dzPlayer.playPlaylist({playlistId});
+                        return 'played';
+                    }}
+                    if (typeof window.dzPlayer.playContext === 'function') {{
+                        window.dzPlayer.playContext('playlist', {playlistId});
+                        return 'played_context';
+                    }}
+                }}
+            }} catch(e) {{}}
+            return 'error';
+        }})()";
+
+        return await ExecuteJsAsync(js);
+    }
+}
+
+public class DeezerPlaylist
+{
+    public long Id { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string CoverUrl { get; set; } = string.Empty;
+    public int TrackCount { get; set; }
 }

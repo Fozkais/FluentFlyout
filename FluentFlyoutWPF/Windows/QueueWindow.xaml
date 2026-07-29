@@ -35,6 +35,7 @@
             </StackPanel>
             
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+                <ui:Button Name="PlaylistButton" Appearance="Transparent" Icon="{ui:SymbolIcon Library20}" Margin="0,0,4,0" ToolTip="Playlists du compte" Click="PlaylistButton_Click"/>
                 <ui:Button Name="RefreshButton" Appearance="Transparent" Icon="{ui:SymbolIcon ArrowSync20}" Margin="0,0,4,0" ToolTip="Actualiser la file d'attente" Click="RefreshButton_Click"/>
                 <ui:Button Name="SearchToggleButton" Appearance="Transparent" Icon="{ui:SymbolIcon Search20}" Margin="0,0,4,0" ToolTip="Rechercher un titre" Click="SearchToggleButton_Click"/>
                 <ui:Button Name="CloseButton" Appearance="Transparent" Icon="{ui:SymbolIcon Dismiss20}" ToolTip="Fermer" Click="CloseButton_Click"/>
@@ -43,6 +44,41 @@
 
         <!-- Search Bar (Collapsible) -->
         <ui:TextBox Name="SearchTextBox" Grid.Row="1" PlaceholderText="Rechercher un titre ou un artiste..." ClearButtonEnabled="True" Margin="0,0,0,8" Visibility="Collapsed" TextChanged="SearchTextBox_TextChanged"/>
+
+        <!-- Playlist Selector (Collapsible) -->
+        <Border Name="PlaylistSelectorContainer" Grid.Row="1" Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}" CornerRadius="8" Padding="6" Margin="0,0,0,8" Visibility="Collapsed">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <TextBlock Text="Vos Playlists Deezer" FontSize="12" FontWeight="SemiBold" Margin="4,2,0,6" Opacity="0.8"/>
+                <ProgressBar Name="PlaylistLoadingBar" Grid.Row="1" IsIndeterminate="True" Height="3" VerticalAlignment="Top" Visibility="Collapsed"/>
+                <ListView Name="PlaylistListView" Grid.Row="1" MaxHeight="160"
+                          ScrollViewer.VerticalScrollBarVisibility="Auto"
+                          Background="Transparent" BorderThickness="0">
+                    <ListView.ItemTemplate>
+                        <DataTemplate>
+                            <Border Padding="4" CornerRadius="4" Cursor="Hand" Background="Transparent" MouseLeftButtonDown="PlaylistItem_Click">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="32"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border CornerRadius="4" ClipToBounds="True" Width="32" Height="32">
+                                        <Image Source="{Binding CoverUrl}" Stretch="UniformToFill"/>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="8,0,0,0">
+                                        <TextBlock Text="{Binding Title}" FontWeight="Medium" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding TrackCount, StringFormat='{}{0} titres'}" FontSize="10" Opacity="0.6"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+            </Grid>
+        </Border>
 
         <!-- Loading / Queue List -->
         <Grid Grid.Row="2">

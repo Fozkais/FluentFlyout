@@ -23,6 +23,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <StackPanel Orientation="Horizontal" Margin="0,0,0,24">
@@ -64,8 +65,18 @@
                 <controls:ToggleSwitch IsChecked="{Binding QueueCloseOnTrackClick, Mode=TwoWay}" />
             </ui:CardControl>
 
+            <ui:CardControl Icon="{ui:SymbolIcon Library20}" Grid.Row="4" Margin="0,0,0,12">
+                <ui:CardControl.Header>
+                    <StackPanel Orientation="Vertical">
+                        <TextBlock Text="Afficher le sélecteur de playlists" FontSize="14" FontWeight="Regular" VerticalAlignment="Center" />
+                        <TextBlock Text="Affiche le bouton de sélection des playlists de votre compte dans l'en-tête de la file d'attente" FontSize="12" Opacity="0.5" />
+                    </StackPanel>
+                </ui:CardControl.Header>
+                <controls:ToggleSwitch IsChecked="{Binding QueuePlaylistSelectorEnabled, Mode=TwoWay}" />
+            </ui:CardControl>
+
             <!-- Deezer CDP Status card -->
-            <ui:CardControl x:Name="DeezerCdpTitleCard" Grid.Row="4" Icon="{ui:SymbolIcon Desktop20}" Margin="0,12,0,76">
+            <ui:CardControl x:Name="DeezerCdpTitleCard" Grid.Row="5" Icon="{ui:SymbolIcon Desktop20}" Margin="0,12,0,76">
                 <ui:CardControl.Header>
                     <StackPanel Orientation="Vertical">
                         <TextBlock Text="Intégration Deezer Desktop (Direct CDP ⚡)" FontSize="14" FontWeight="Regular" VerticalAlignment="Center" />

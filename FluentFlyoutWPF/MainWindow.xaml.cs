@@ -1318,40 +1318,99 @@ public partial class MainWindow : MicaWindow
     private async void Repeat_Click(object sender, RoutedEventArgs e)
     {
         var activeSession = GetActiveMediaSession();
+        string appId = activeSession?.ControlSession?.SourceAppUserModelId ?? "";
+        bool isDeezer = appId.Contains("deezer", StringComparison.OrdinalIgnoreCase);
+
+        if (isDeezer && await DeezerCdpService.IsCdpAvailableAsync())
+        {
+            int newMode = await DeezerCdpService.ToggleRepeatAsync();
+            UpdateRepeatUi(newMode);
+            return;
+        }
+
         if (activeSession == null) return;
 
         if (activeSession.ControlSession.GetPlaybackInfo().AutoRepeatMode == global::Windows.Media.MediaPlaybackAutoRepeatMode.None)
         {
-            SymbolRepeat.Dispatcher.Invoke(() => SymbolRepeat.Symbol = Wpf.Ui.Controls.SymbolRegular.ArrowRepeatAll24);
+            SymbolRepeat.Dispatcher.Invoke(() => { SymbolRepeat.Symbol = Wpf.Ui.Controls.SymbolRegular.ArrowRepeatAll24; SymbolRepeat.Opacity = 1.0; });
             await activeSession.ControlSession.TryChangeAutoRepeatModeAsync(global::Windows.Media.MediaPlaybackAutoRepeatMode.List);
         }
         else if (activeSession.ControlSession.GetPlaybackInfo().AutoRepeatMode == global::Windows.Media.MediaPlaybackAutoRepeatMode.List)
         {
-            SymbolRepeat.Dispatcher.Invoke(() => SymbolRepeat.Symbol = Wpf.Ui.Controls.SymbolRegular.ArrowRepeat124);
+            SymbolRepeat.Dispatcher.Invoke(() => { SymbolRepeat.Symbol = Wpf.Ui.Controls.SymbolRegular.ArrowRepeat124; SymbolRepeat.Opacity = 1.0; });
             await activeSession.ControlSession.TryChangeAutoRepeatModeAsync(global::Windows.Media.MediaPlaybackAutoRepeatMode.Track);
         }
         else if (activeSession.ControlSession.GetPlaybackInfo().AutoRepeatMode == global::Windows.Media.MediaPlaybackAutoRepeatMode.Track)
         {
-            SymbolRepeat.Dispatcher.Invoke(() => SymbolRepeat.Symbol = Wpf.Ui.Controls.SymbolRegular.ArrowRepeatAllOff24);
+            SymbolRepeat.Dispatcher.Invoke(() => { SymbolRepeat.Symbol = Wpf.Ui.Controls.SymbolRegular.ArrowRepeatAllOff24; SymbolRepeat.Opacity = 0.5; });
             await activeSession.ControlSession.TryChangeAutoRepeatModeAsync(global::Windows.Media.MediaPlaybackAutoRepeatMode.None);
         }
+    }
+
+    private void UpdateRepeatUi(int mode)
+    {
+        SymbolRepeat.Dispatcher.Invoke(() =>
+        {
+            if (mode == 1)
+            {
+                SymbolRepeat.Symbol = Wpf.Ui.Controls.SymbolRegular.ArrowRepeatAll24;
+                SymbolRepeat.Opacity = 1.0;
+            }
+            else if (mode == 2)
+            {
+                SymbolRepeat.Symbol = Wpf.Ui.Controls.SymbolRegular.ArrowRepeat124;
+                SymbolRepeat.Opacity = 1.0;
+            }
+            else
+            {
+                SymbolRepeat.Symbol = Wpf.Ui.Controls.SymbolRegular.ArrowRepeatAllOff24;
+                SymbolRepeat.Opacity = 0.5;
+            }
+        });
     }
 
     private async void Shuffle_Click(object sender, RoutedEventArgs e)
     {
         var activeSession = GetActiveMediaSession();
+        string appId = activeSession?.ControlSession?.SourceAppUserModelId ?? "";
+        bool isDeezer = appId.Contains("deezer", StringComparison.OrdinalIgnoreCase);
+
+        if (isDeezer && await DeezerCdpService.IsCdpAvailableAsync())
+        {
+            bool isShuffle = await DeezerCdpService.ToggleShuffleAsync();
+            UpdateShuffleUi(isShuffle);
+            return;
+        }
+
         if (activeSession == null) return;
 
         if (activeSession.ControlSession.GetPlaybackInfo().IsShuffleActive == true)
         {
-            SymbolShuffle.Dispatcher.Invoke(() => SymbolShuffle.Symbol = Wpf.Ui.Controls.SymbolRegular.ArrowShuffleOff24);
+            UpdateShuffleUi(false);
             await activeSession.ControlSession.TryChangeShuffleActiveAsync(false);
         }
         else
         {
-            SymbolShuffle.Dispatcher.Invoke(() => SymbolShuffle.Symbol = Wpf.Ui.Controls.SymbolRegular.ArrowShuffle24);
+            UpdateShuffleUi(true);
             await activeSession.ControlSession.TryChangeShuffleActiveAsync(true);
         }
+    }
+
+    private void UpdateShuffleUi(bool isShuffle)
+    {
+        SymbolShuffle.Dispatcher.Invoke(() =>
+        {
+            if (isShuffle)
+            {
+                SymbolShuffle.Symbol = Wpf.Ui.Controls.SymbolRegular.ArrowShuffle24;
+                SymbolShuffle.Opacity = 1.0;
+            }
+            else
+            {
+                SymbolShuffle.Symbol = Wpf.Ui.Controls.SymbolRegular.ArrowShuffleOff24;
+                SymbolShuffle.Opacity = 0.5;
+            }
+        });
     }
 
     private void Seekbar_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)

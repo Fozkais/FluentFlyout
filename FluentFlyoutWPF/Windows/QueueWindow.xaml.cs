@@ -48,6 +48,11 @@ public partial class QueueWindow : MicaWindow
             LoadingBar.Visibility = Visibility.Collapsed;
         }
 
+        if (!SettingsManager.Current.QueuePlaylistSelectorEnabled)
+        {
+            PlaylistButton.Visibility = Visibility.Collapsed;
+        }
+
         // Force fresh queue check from CDP on opening flyout so playlist changes reflect instantly
         LoadQueue(currentTitle, currentArtist, forceRefresh: true);
 
@@ -182,8 +187,51 @@ public partial class QueueWindow : MicaWindow
         timer.Start();
     }
 
+    private async void PlaylistButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (PlaylistSelectorContainer.Visibility == Visibility.Visible)
+        {
+            PlaylistSelectorContainer.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        SearchTextBox.Visibility = Visibility.Collapsed;
+        PlaylistSelectorContainer.Visibility = Visibility.Visible;
+
+        if (PlaylistListView.ItemsSource == null)
+        {
+            PlaylistLoadingBar.Visibility = Visibility.Visible;
+            var playlists = await DeezerCdpService.GetUserPlaylistsAsync();
+            PlaylistLoadingBar.Visibility = Visibility.Collapsed;
+            PlaylistListView.ItemsSource = playlists;
+        }
+    }
+
+    private async void PlaylistItem_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.DataContext is DeezerPlaylist playlist)
+        {
+            PlaylistSelectorContainer.Visibility = Visibility.Collapsed;
+            LoadingBar.Visibility = Visibility.Visible;
+
+            bool success = await DeezerCdpService.PlayPlaylistAsync(playlist.Id);
+            if (success)
+            {
+                await Task.Delay(150);
+                var activeSession = _mainWindow.GetActiveMediaSession();
+                var songInfo = activeSession != null ? MainWindow.TryGetMediaProperties(activeSession.ControlSession) : null;
+                LoadQueue(songInfo?.Title ?? "", songInfo?.Artist ?? "", forceRefresh: true);
+            }
+            else
+            {
+                LoadingBar.Visibility = Visibility.Collapsed;
+            }
+        }
+    }
+
     private void SearchToggleButton_Click(object sender, RoutedEventArgs e)
     {
+        PlaylistSelectorContainer.Visibility = Visibility.Collapsed;
         if (SearchTextBox.Visibility == Visibility.Visible)
         {
             SearchTextBox.Visibility = Visibility.Collapsed;
