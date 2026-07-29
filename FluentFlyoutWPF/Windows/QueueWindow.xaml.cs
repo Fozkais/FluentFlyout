@@ -48,7 +48,8 @@ public partial class QueueWindow : MicaWindow
             LoadingBar.Visibility = Visibility.Collapsed;
         }
 
-        LoadQueue(currentTitle, currentArtist);
+        // Force fresh queue check from CDP on opening flyout so playlist changes reflect instantly
+        LoadQueue(currentTitle, currentArtist, forceRefresh: true);
 
         // Event-driven track change listener (0 periodic polling overhead)
         _mainWindow.mediaManager.OnAnyMediaPropertyChanged += MediaManager_OnAnyMediaPropertyChanged;
@@ -77,6 +78,13 @@ public partial class QueueWindow : MicaWindow
             _autoCloseTimer?.Stop();
             _mainWindow.mediaManager.OnAnyMediaPropertyChanged -= MediaManager_OnAnyMediaPropertyChanged;
         };
+    }
+
+    private void RefreshButton_Click(object sender, RoutedEventArgs e)
+    {
+        var activeSession = _mainWindow.GetActiveMediaSession();
+        var songInfo = activeSession != null ? MainWindow.TryGetMediaProperties(activeSession.ControlSession) : null;
+        LoadQueue(songInfo?.Title ?? "", songInfo?.Artist ?? "", forceRefresh: true);
     }
 
     private void MediaManager_OnAnyMediaPropertyChanged(MediaManager.MediaSession mediaSession, GlobalSystemMediaTransportControlsSessionMediaProperties mediaProperties)
