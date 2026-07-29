@@ -22,7 +22,6 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- Header -->
@@ -154,13 +153,5 @@
                 </ListView.ItemTemplate>
             </ListView>
         </Grid>
-
-        <!-- Auth Footer -->
-        <Border Grid.Row="3" Margin="0,10,0,0" Padding="8,4" Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}" CornerRadius="6">
-            <Grid>
-                <TextBlock Name="AuthStatusText" Text="Mode Connecté" FontSize="11" VerticalAlignment="Center" Opacity="0.7"/>
-                <ui:Button Name="AuthButton" Content="Se connecter à Deezer" Appearance="Primary" HorizontalAlignment="Right" Click="AuthButton_Click"/>
-            </Grid>
-        </Border>
     </Grid>
 </controls:MicaWindow>

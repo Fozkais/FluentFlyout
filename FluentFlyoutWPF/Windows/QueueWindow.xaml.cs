@@ -41,8 +41,6 @@ public partial class QueueWindow : MicaWindow
             WindowBlurHelper.DisableBlur(this);
         }
 
-        UpdateAuthStatus();
-
         // 0ms Instant display if cached queue exists
         if (DeezerService.CachedQueue.Count > 0)
         {
@@ -94,20 +92,6 @@ public partial class QueueWindow : MicaWindow
         });
     }
 
-    private void UpdateAuthStatus()
-    {
-        if (DeezerAuthService.IsAuthenticated)
-        {
-            AuthStatusText.Text = "Connecté à Deezer";
-            AuthButton.Content = "Déconnexion";
-        }
-        else
-        {
-            AuthStatusText.Text = "Mode Déconnecté";
-            AuthButton.Content = "Se connecter";
-        }
-    }
-
     private async void LoadQueue(string currentTitle, string currentArtist, bool forceRefresh = false)
     {
         bool isInitialLoad = (QueueListView.ItemsSource == null);
@@ -137,40 +121,23 @@ public partial class QueueWindow : MicaWindow
         // Apply any active search filter
         ApplyFilter();
 
-        // Smooth Auto-scroll to current track with 0 delay
+        // Auto-scroll to currently playing track
         int currentIdx = _fullQueue.FindIndex(t => t.IsCurrent);
-        if (currentIdx >= 0)
+        if (currentIdx >= 0 && currentIdx < _fullQueue.Count)
         {
-            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () =>
+            var activeItem = _fullQueue[currentIdx];
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () =>
             {
                 try
                 {
-                    var scrollViewer = FindVisualChild<ScrollViewer>(QueueListView);
-                    if (scrollViewer != null)
-                    {
-                        double itemHeight = 44.0;
-                        double targetOffset = (currentIdx * itemHeight) - (scrollViewer.ViewportHeight / 2) + (itemHeight / 2);
-                        if (targetOffset < 0) targetOffset = 0;
-                        if (targetOffset > scrollViewer.ScrollableHeight) targetOffset = scrollViewer.ScrollableHeight;
-                        
-                        SmoothScrollToOffset(scrollViewer, targetOffset);
-                    }
-                    else
-                    {
-                        var activeItem = _fullQueue[currentIdx];
-                        QueueListView.ScrollIntoView(activeItem);
-                    }
+                    QueueListView.ScrollIntoView(activeItem);
                 }
                 catch { }
             });
         }
 
         _contextSource = DeezerService.LastQueueSource;
-        bool isCdp = await DeezerCdpService.IsCdpAvailableAsync();
-        string modeStr = isCdp ? "Mode Direct CDP ⚡" : "Mode Windows GSMTC";
-        ContextLabel.Text = string.IsNullOrEmpty(_contextSource)
-            ? $"[{modeStr}]"
-            : $"Source : {_contextSource}  •  [{modeStr}]";
+        ContextLabel.Text = string.IsNullOrEmpty(_contextSource) ? "" : $"Source : {_contextSource}";
     }
 
     private static void SmoothScrollToOffset(ScrollViewer scrollViewer, double targetOffset)
@@ -457,26 +424,6 @@ public partial class QueueWindow : MicaWindow
                 return childOfChild;
         }
         return null;
-    }
-
-    private async void AuthButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (DeezerAuthService.IsAuthenticated)
-        {
-            DeezerAuthService.Logout();
-            UpdateAuthStatus();
-        }
-        else
-        {
-            bool success = await DeezerAuthService.AuthenticateAsync();
-            UpdateAuthStatus();
-            if (success)
-            {
-                var activeSession = _mainWindow.GetActiveMediaSession();
-                var songInfo = activeSession != null ? MainWindow.TryGetMediaProperties(activeSession.ControlSession) : null;
-                LoadQueue(songInfo?.Title ?? "", songInfo?.Artist ?? "");
-            }
-        }
     }
 
     private bool _isClosing = false;
