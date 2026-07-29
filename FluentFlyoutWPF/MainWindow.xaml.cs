@@ -1395,6 +1395,12 @@ public partial class MainWindow : MicaWindow
         {
             bool isShuffle = await DeezerCdpService.ToggleShuffleAsync();
             UpdateShuffleUi(isShuffle);
+
+            if (Windows.QueueWindow.ActiveInstance != null && Windows.QueueWindow.ActiveInstance.IsVisible)
+            {
+                var songInfo = activeSession != null ? TryGetMediaProperties(activeSession.ControlSession) : null;
+                Windows.QueueWindow.ActiveInstance.LoadQueue(songInfo?.Title ?? "", songInfo?.Artist ?? "", forceRefresh: true);
+            }
             return;
         }
 

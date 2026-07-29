@@ -56,13 +56,14 @@
                 <ProgressBar Name="PlaylistLoadingBar" Grid.Row="1" IsIndeterminate="True" Height="3" VerticalAlignment="Top" Visibility="Collapsed"/>
                 <ListView Name="PlaylistListView" Grid.Row="1" Height="180"
                           ScrollViewer.VerticalScrollBarVisibility="Auto"
-                          Background="Transparent" BorderThickness="0">
+                          Background="Transparent" BorderThickness="0"
+                          SelectionChanged="PlaylistListView_SelectionChanged">
                     <ListView.ItemTemplate>
                         <DataTemplate>
-                            <Border Padding="4" CornerRadius="4" Cursor="Hand" Background="Transparent" MouseLeftButtonDown="PlaylistItem_Click">
+                            <Border Padding="4" CornerRadius="4" Cursor="Hand" Background="Transparent">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="32"/>
+                                        <ColumnDefinition Width="36"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
                                     <Border CornerRadius="4" ClipToBounds="True" Width="32" Height="32">

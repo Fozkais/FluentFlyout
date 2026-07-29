@@ -502,6 +502,18 @@ public static class DeezerCdpService
         return 0;
     }
 
+    private static long GetLongSafe(JsonElement elem, string propName)
+    {
+        if (elem.TryGetProperty(propName, out var prop))
+        {
+            if (prop.ValueKind == JsonValueKind.Number && prop.TryGetInt64(out long val))
+                return val;
+            if (prop.ValueKind == JsonValueKind.String && long.TryParse(prop.GetString(), out long parsedVal))
+                return parsedVal;
+        }
+        return 0;
+    }
+
     private static readonly HttpClient _httpClient = new HttpClient();
 
     // Playlist Selector CDP API
@@ -569,10 +581,10 @@ public static class DeezerCdpService
                     {
                         foreach (var item in dataArr.EnumerateArray())
                         {
-                            long id = item.TryGetProperty("id", out var idProp) ? idProp.GetInt64() : 0;
+                            long id = GetLongSafe(item, "id");
                             string title = item.TryGetProperty("title", out var titleProp) ? titleProp.GetString() ?? "" : "";
                             string pic = item.TryGetProperty("picture_medium", out var picProp) ? picProp.GetString() ?? "" : "";
-                            int count = item.TryGetProperty("nb_tracks", out var countProp) ? countProp.GetInt32() : 0;
+                            int count = GetIntSafe(item, "nb_tracks");
 
                             if (id > 0)
                             {
@@ -605,10 +617,10 @@ public static class DeezerCdpService
             using var doc = JsonDocument.Parse(json);
             foreach (var item in doc.RootElement.EnumerateArray())
             {
-                long id = item.TryGetProperty("id", out var idProp) ? idProp.GetInt64() : 0;
+                long id = GetLongSafe(item, "id");
                 string title = item.TryGetProperty("title", out var titleProp) ? titleProp.GetString() ?? "" : "";
                 string pic = item.TryGetProperty("picture", out var picProp) ? picProp.GetString() ?? "" : "";
-                int count = item.TryGetProperty("tracks", out var countProp) ? countProp.GetInt32() : 0;
+                int count = GetIntSafe(item, "tracks");
 
                 string coverUrl = string.IsNullOrEmpty(pic)
                     ? "https://e-cdns-images.dzcdn.net/images/cover/250x250-000000-80-0-0.jpg"

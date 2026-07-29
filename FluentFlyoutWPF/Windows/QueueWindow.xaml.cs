@@ -17,14 +17,15 @@ namespace FluentFlyoutWPF.Windows;
 
 public partial class QueueWindow : MicaWindow
 {
+    public static QueueWindow? ActiveInstance { get; private set; }
     private readonly MainWindow _mainWindow = (MainWindow)Application.Current.MainWindow;
     private string _contextSource = string.Empty;
     private System.Windows.Threading.DispatcherTimer? _autoCloseTimer;
     private List<DeezerTrack> _fullQueue = new();
-    private Point _dragStartPoint;
 
     public QueueWindow(string currentTitle, string currentArtist)
     {
+        ActiveInstance = this;
         DataContext = SettingsManager.Current;
         WindowStartupLocation = WindowStartupLocation.Manual;
         WindowHelper.SetNoActivate(this);
@@ -80,6 +81,7 @@ public partial class QueueWindow : MicaWindow
 
         Closed += (s, e) =>
         {
+            if (ActiveInstance == this) ActiveInstance = null;
             _autoCloseTimer?.Stop();
             _mainWindow.mediaManager.OnAnyMediaPropertyChanged -= MediaManager_OnAnyMediaPropertyChanged;
         };
@@ -105,7 +107,7 @@ public partial class QueueWindow : MicaWindow
         });
     }
 
-    private async void LoadQueue(string currentTitle, string currentArtist, bool forceRefresh = false)
+    public async void LoadQueue(string currentTitle, string currentArtist, bool forceRefresh = false)
     {
         bool isInitialLoad = (QueueListView.ItemsSource == null);
         if (isInitialLoad)
@@ -198,34 +200,25 @@ public partial class QueueWindow : MicaWindow
         SearchTextBox.Visibility = Visibility.Collapsed;
         PlaylistSelectorContainer.Visibility = Visibility.Visible;
 
-        if (PlaylistListView.ItemsSource == null)
-        {
-            PlaylistLoadingBar.Visibility = Visibility.Visible;
-            var playlists = await DeezerCdpService.GetUserPlaylistsAsync();
-            PlaylistLoadingBar.Visibility = Visibility.Collapsed;
-            PlaylistListView.ItemsSource = playlists;
-        }
+        PlaylistLoadingBar.Visibility = Visibility.Visible;
+        var playlists = await DeezerCdpService.GetUserPlaylistsAsync();
+        PlaylistLoadingBar.Visibility = Visibility.Collapsed;
+        PlaylistListView.ItemsSource = playlists;
     }
 
-    private async void PlaylistItem_Click(object sender, MouseButtonEventArgs e)
+    private async void PlaylistListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (sender is FrameworkElement fe && fe.DataContext is DeezerPlaylist playlist)
+        if (PlaylistListView.SelectedItem is DeezerPlaylist playlist)
         {
+            PlaylistListView.SelectedItem = null;
             PlaylistSelectorContainer.Visibility = Visibility.Collapsed;
             LoadingBar.Visibility = Visibility.Visible;
 
             bool success = await DeezerCdpService.PlayPlaylistAsync(playlist.Id);
-            if (success)
-            {
-                await Task.Delay(150);
-                var activeSession = _mainWindow.GetActiveMediaSession();
-                var songInfo = activeSession != null ? MainWindow.TryGetMediaProperties(activeSession.ControlSession) : null;
-                LoadQueue(songInfo?.Title ?? "", songInfo?.Artist ?? "", forceRefresh: true);
-            }
-            else
-            {
-                LoadingBar.Visibility = Visibility.Collapsed;
-            }
+            await Task.Delay(300);
+            var activeSession = _mainWindow.GetActiveMediaSession();
+            var songInfo = activeSession != null ? MainWindow.TryGetMediaProperties(activeSession.ControlSession) : null;
+            LoadQueue(songInfo?.Title ?? "", songInfo?.Artist ?? "", forceRefresh: true);
         }
     }
 
