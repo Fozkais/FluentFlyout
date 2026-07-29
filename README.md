@@ -32,7 +32,7 @@ FluentFlyout features smooth animations, blends with your system's color themes 
 - **Audio flyout: Displays Cover, Title, Artist and media controls**
 - **"Up Next" flyout: shows what's next when a song ends**
 - **Lock Keys flyout: displays the status of lock keys at a glance**
-- **Taskbar widget: shows media info directly on the Windows taskbar**
+- **Deezer Desktop CDP Integration: Full queue management, playlist selector, real-time shuffle & repeat sync**
 - Native Windows-like design
 - Uses Fluent 2 components
 - Utilises Windows Mica blur
@@ -75,6 +75,36 @@ https://github.com/user-attachments/assets/bfc7666f-1d59-4cbf-8d15-3855671cb147
 	<img height="220px" width="auto" src="https://github.com/user-attachments/assets/e45592d5-8576-4d6a-8679-56baacccd585"> <img height="220px" width="auto" src="https://github.com/user-attachments/assets/ff2fcfab-8e24-48cf-9bdf-d35252eb3e67">
 </div>
 </details>
+
+## Deezer Integration & Chrome DevTools Protocol (CDP) 🎧
+
+FluentFlyout feature deep, native control for **Deezer Desktop** on Windows via the **Chrome DevTools Protocol (CDP)**. This unlocks advanced features beyond standard Windows media session controls:
+
+- **Up Next / Queue Management**: View your full upcoming queue, jump directly to any song, and search/filter upcoming tracks.
+- **Live Deezer App Watcher**: Automatic background sync detects track reorders, deletions, shuffle toggles, and song changes performed inside Deezer Desktop.
+- **Account Playlist Selector**: Browse your personal playlists and launch any playlist directly from the flyout UI.
+- **Shuffle & Repeat Sync**: Toggle Shuffle mode and Cycle Repeat mode (Off / Repeat All / Repeat One) directly with real-time feedback.
+
+### How it Works ⚙️
+Deezer Desktop is built on Electron. Electron apps expose a debugging WebSocket endpoint when launched with the `--remote-debugging-port=9222` flag.
+FluentFlyout connects to `ws://localhost:9222` using CDP to communicate with Deezer's internal player engine (`dzPlayer`) and DOM routing seamlessly.
+
+### How to Configure 🛠️
+
+1. **Automatic Launch (Recommended)**:
+   - Go to **FluentFlyout Settings > Integrations / Media** and enable **Deezer Integration**.
+   - When FluentFlyout is running, launching Deezer will automatically pass `--remote-debugging-port=9222`.
+
+2. **Manual Deezer Startup**:
+   - If starting Deezer via a shortcut or terminal, append `--remote-debugging-port=9222` to the launch path:
+     ```cmd
+     "C:\Users\<User>\AppData\Local\Programs\deezer-desktop\Deezer.exe" --remote-debugging-port=9222
+     ```
+
+3. **Usage in Flyout**:
+   - Open the **Queue / Up Next** flyout while playing music in Deezer Desktop.
+   - Click the **Playlist icon** in the top right to browse and launch your playlists.
+   - Click the **Refresh icon** anytime to manually refresh the queue.
 
 ## How to install 📥
 ### Which version should you choose? 
