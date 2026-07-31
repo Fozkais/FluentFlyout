@@ -400,7 +400,7 @@ public partial class QueueWindow : MicaWindow
         if (string.IsNullOrEmpty(query))
         {
             QueueListView.ItemsSource = null;
-            QueueListView.ItemsSource = _fullQueue;
+            QueueListView.ItemsSource = _fullQueue.ToList();
         }
         else
         {
@@ -552,11 +552,6 @@ public partial class QueueWindow : MicaWindow
         }
     }
 
-    private void QueueWindow_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-    {
-        QueueItem_PreviewMouseLeftButtonUp(sender, e);
-    }
-
     private async void QueueItem_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
         if (_draggedBorder != null)
@@ -573,7 +568,12 @@ public partial class QueueWindow : MicaWindow
             if (wasDragging && trackItem != null)
             {
                 int fromIndex = _fullQueue.IndexOf(trackItem);
-                int shiftIndices = (int)Math.Round(finalDeltaY / 44.0); // 44px item row height
+                int shiftIndices = (int)Math.Round(finalDeltaY / 38.0);
+                if (shiftIndices == 0 && Math.Abs(finalDeltaY) > 10)
+                {
+                    shiftIndices = Math.Sign(finalDeltaY);
+                }
+
                 int toIndex = Math.Clamp(fromIndex + shiftIndices, 0, _fullQueue.Count - 1);
 
                 if (fromIndex >= 0 && toIndex >= 0 && fromIndex != toIndex)
@@ -587,13 +587,13 @@ public partial class QueueWindow : MicaWindow
                         _fullQueue[i].TargetIndex = i;
                     }
 
+                    _isUserModifiedQueue = true;
                     ApplyFilter();
                     DeezerService.UpdateCache(_fullQueue);
 
                     // 2. Perform reorder
                     if (_contextSource == "Spotify")
                     {
-                        _isUserModifiedQueue = true;
                         if (!string.IsNullOrEmpty(SpotifyService.LastActiveContextUri) && SpotifyService.LastActiveContextUri.StartsWith("spotify:playlist:"))
                         {
                             _ = SpotifyService.ReorderPlaylistTracksAsync(SpotifyService.LastActiveContextUri, fromIndex, toIndex);
