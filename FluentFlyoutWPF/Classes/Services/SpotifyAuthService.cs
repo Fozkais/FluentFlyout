@@ -17,7 +17,7 @@ public static class SpotifyAuthService
 
     // Public Spotify PKCE Client ID (No client secret required)
     public const string DefaultClientId = "65b708073fc0480ea92a077233ca87bd"; 
-    private const string RedirectUri = "http://localhost:8888/spotify-callback/";
+    private const string RedirectUri = "http://localhost:8888/spotify-callback";
 
     public static bool IsAuthenticated => !string.IsNullOrEmpty(SettingsManager.Current.SpotifyRefreshToken);
 
