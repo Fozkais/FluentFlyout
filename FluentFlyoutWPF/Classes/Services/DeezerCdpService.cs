@@ -758,7 +758,7 @@ public static class DeezerCdpService
                         {
                             list.Add(new DeezerPlaylist
                             {
-                                Id = id,
+                                Id = id.ToString(),
                                 Title = title,
                                 CoverUrl = string.IsNullOrEmpty(pic) ? "https://e-cdns-images.dzcdn.net/images/cover/250x250-000000-80-0-0.jpg" : pic,
                                 TrackCount = count
@@ -784,7 +784,8 @@ public static class DeezerCdpService
             using var doc = JsonDocument.Parse(json);
             foreach (var item in doc.RootElement.EnumerateArray())
             {
-                long id = GetLongSafe(item, "id");
+                long idLong = GetLongSafe(item, "id");
+                string id = idLong.ToString();
                 string title = item.TryGetProperty("title", out var titleProp) ? titleProp.GetString() ?? "" : "";
                 string pic = item.TryGetProperty("picture", out var picProp) ? picProp.GetString() ?? "" : "";
                 int count = GetIntSafe(item, "tracks");
@@ -793,7 +794,7 @@ public static class DeezerCdpService
                     ? "https://e-cdns-images.dzcdn.net/images/cover/250x250-000000-80-0-0.jpg"
                     : (pic.StartsWith("http") ? pic : $"https://e-cdns-images.dzcdn.net/images/cover/{pic}/250x250-000000-80-0-0.jpg");
 
-                if (id > 0)
+                if (idLong > 0)
                 {
                     list.Add(new DeezerPlaylist
                     {
@@ -812,7 +813,7 @@ public static class DeezerCdpService
         return list;
     }
 
-    public static async Task<bool> PlayPlaylistAsync(long playlistId)
+    public static async Task<bool> PlayPlaylistAsync(string playlistId)
     {
         // 1. Direct SPA hash navigation and DOM play button click (100% reliable on Deezer Desktop UI)
         string navJs = $@"(async function() {{
@@ -910,7 +911,7 @@ public static class DeezerCdpService
 
 public class DeezerPlaylist
 {
-    public long Id { get; set; }
+    public string Id { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
     public string CoverUrl { get; set; } = string.Empty;
     public int TrackCount { get; set; }

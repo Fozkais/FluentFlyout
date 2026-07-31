@@ -210,6 +210,24 @@ public partial class UserSettings : ObservableObject
     public partial bool DeezerQueueEnabled { get; set; } = true;
 
     [ObservableProperty]
+    public partial bool SpotifyQueueEnabled { get; set; } = true;
+
+    [ObservableProperty]
+    public partial string SpotifyClientId { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string SpotifyAccessToken { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string SpotifyRefreshToken { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial DateTime SpotifyTokenExpiration { get; set; } = DateTime.MinValue;
+
+    [ObservableProperty]
+    public partial string PreferredMusicService { get; set; } = "Auto";
+
+    [ObservableProperty]
     public partial bool QueueAutoCloseOnLeave { get; set; } = false;
 
     [ObservableProperty]

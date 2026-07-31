@@ -168,11 +168,50 @@ public partial class QueueWindow : MicaWindow
             EmptyMessage.Visibility = Visibility.Collapsed;
         }
 
-        // Pre-warm CDP debug port in background
-        _ = DeezerCdpService.EnsureDeezerRunningWithDebugPortAsync();
+        bool isSpotifyActive = false;
+        var activeSession = _mainWindow.GetActiveMediaSession();
+        if (activeSession != null)
+        {
+            string appId = activeSession.ControlSession?.SourceAppUserModelId ?? "";
+            if (appId.Contains("spotify", StringComparison.OrdinalIgnoreCase))
+                isSpotifyActive = true;
+        }
+        else if (SpotifyAuthService.IsAuthenticated && SettingsManager.Current.PreferredMusicService == "Spotify")
+        {
+            isSpotifyActive = true;
+        }
 
-        var newTracks = await DeezerService.GetQueueAsync(currentTitle, currentArtist, forceRefresh);
-        _fullQueue = newTracks ?? new List<DeezerTrack>();
+        if (isSpotifyActive && SpotifyAuthService.IsAuthenticated)
+        {
+            var sTracks = await SpotifyService.GetQueueAsync();
+            if (sTracks != null)
+            {
+                _fullQueue = sTracks.Select(t => new DeezerTrack
+                {
+                    Id = t.Id,
+                    Title = t.Title,
+                    Artist = t.Artist,
+                    Album = t.Album,
+                    CoverUrl = t.CoverUrl,
+                    DurationSeconds = t.DurationSeconds,
+                    TargetIndex = t.TargetIndex,
+                    IsCurrent = t.IsCurrent
+                }).ToList();
+                _contextSource = "Spotify";
+            }
+            else
+            {
+                _fullQueue = new List<DeezerTrack>();
+            }
+        }
+        else
+        {
+            // Pre-warm Deezer CDP debug port in background
+            _ = DeezerCdpService.EnsureDeezerRunningWithDebugPortAsync();
+            var newTracks = await DeezerService.GetQueueAsync(currentTitle, currentArtist, forceRefresh);
+            _fullQueue = newTracks ?? new List<DeezerTrack>();
+            _contextSource = DeezerService.LastQueueSource;
+        }
 
         LoadingBar.Visibility = Visibility.Collapsed;
 
@@ -203,7 +242,6 @@ public partial class QueueWindow : MicaWindow
             });
         }
 
-        _contextSource = DeezerService.LastQueueSource;
         ContextLabel.Text = string.IsNullOrEmpty(_contextSource) ? "" : $"Source : {_contextSource}";
     }
 
@@ -253,9 +291,40 @@ public partial class QueueWindow : MicaWindow
         PlaylistSelectorContainer.Visibility = Visibility.Visible;
 
         PlaylistLoadingBar.Visibility = Visibility.Visible;
-        var playlists = await DeezerCdpService.GetUserPlaylistsAsync();
-        PlaylistLoadingBar.Visibility = Visibility.Collapsed;
-        PlaylistListView.ItemsSource = playlists;
+
+        bool isSpotifyActive = false;
+        var activeSession = _mainWindow.GetActiveMediaSession();
+        if (activeSession != null)
+        {
+            string appId = activeSession.ControlSession?.SourceAppUserModelId ?? "";
+            if (appId.Contains("spotify", StringComparison.OrdinalIgnoreCase)) isSpotifyActive = true;
+        }
+        else if (SpotifyAuthService.IsAuthenticated && SettingsManager.Current.PreferredMusicService == "Spotify")
+        {
+            isSpotifyActive = true;
+        }
+
+        if (isSpotifyActive && SpotifyAuthService.IsAuthenticated)
+        {
+            var sPlaylists = await SpotifyService.GetUserPlaylistsAsync();
+            PlaylistLoadingBar.Visibility = Visibility.Collapsed;
+            if (sPlaylists != null)
+            {
+                PlaylistListView.ItemsSource = sPlaylists.Select(p => new DeezerPlaylist
+                {
+                    Id = p.Uri, // Use Uri for Spotify play request
+                    Title = p.Title,
+                    CoverUrl = p.CoverUrl,
+                    TrackCount = p.TrackCount
+                }).ToList();
+            }
+        }
+        else
+        {
+            var playlists = await DeezerCdpService.GetUserPlaylistsAsync();
+            PlaylistLoadingBar.Visibility = Visibility.Collapsed;
+            PlaylistListView.ItemsSource = playlists;
+        }
     }
 
     private async void PlaylistListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -266,8 +335,16 @@ public partial class QueueWindow : MicaWindow
             PlaylistSelectorContainer.Visibility = Visibility.Collapsed;
             LoadingBar.Visibility = Visibility.Visible;
 
-            bool success = await DeezerCdpService.PlayPlaylistAsync(playlist.Id);
-            await Task.Delay(300);
+            if (playlist.Id.StartsWith("spotify:"))
+            {
+                await SpotifyService.PlayPlaylistAsync(playlist.Id);
+            }
+            else
+            {
+                await DeezerCdpService.PlayPlaylistAsync(playlist.Id);
+            }
+
+            await Task.Delay(400);
             var activeSession = _mainWindow.GetActiveMediaSession();
             var songInfo = activeSession != null ? MainWindow.TryGetMediaProperties(activeSession.ControlSession) : null;
             LoadQueue(songInfo?.Title ?? "", songInfo?.Artist ?? "", forceRefresh: true);
@@ -345,18 +422,26 @@ public partial class QueueWindow : MicaWindow
 
     private void PlayTrack(DeezerTrack track)
     {
-        if (track == null || track.TargetIndex < 0) return;
+        if (track == null) return;
 
         // 1. Instant 0ms visual update in UI
         foreach (var t in _fullQueue)
         {
-            t.IsCurrent = (t.TargetIndex == track.TargetIndex);
+            t.IsCurrent = (t == track);
         }
         ApplyFilter();
         DeezerService.UpdateCache(_fullQueue);
 
-        // 2. Perform CDP play track at index immediately in background (1ms latency via persistent WebSocket)
-        _ = DeezerCdpService.PlayTrackAtIndexAsync(track.TargetIndex);
+        // 2. Perform Spotify or CDP play track in background
+        if (_contextSource == "Spotify" || SpotifyAuthService.IsAuthenticated && (track.Id.Length == 22 || track.Id.StartsWith("spotify:")))
+        {
+            string trackUri = track.Id.StartsWith("spotify:") ? track.Id : $"spotify:track:{track.Id}";
+            _ = SpotifyService.PlayTrackUriAsync(trackUri);
+        }
+        else if (track.TargetIndex >= 0)
+        {
+            _ = DeezerCdpService.PlayTrackAtIndexAsync(track.TargetIndex);
+        }
 
         // 3. Close flyout if configured
         if (SettingsManager.Current.QueueCloseOnTrackClick)

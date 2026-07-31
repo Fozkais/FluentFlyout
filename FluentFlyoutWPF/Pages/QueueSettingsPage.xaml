@@ -75,8 +75,22 @@
                 <controls:ToggleSwitch IsChecked="{Binding QueuePlaylistSelectorEnabled, Mode=TwoWay}" />
             </ui:CardControl>
 
+            <!-- Spotify Integration card -->
+            <ui:CardControl x:Name="SpotifyCard" Grid.Row="5" Icon="{ui:SymbolIcon Music20}" Margin="0,12,0,12">
+                <ui:CardControl.Header>
+                    <StackPanel Orientation="Vertical">
+                        <TextBlock Text="Intégration Spotify (Web API 🟢)" FontSize="14" FontWeight="Regular" VerticalAlignment="Center" />
+                        <TextBlock Text="Connexion OAuth 2.0 PKCE officielle à l'API Spotify pour la file d'attente et les playlists." FontSize="12" Opacity="0.5" />
+                    </StackPanel>
+                </ui:CardControl.Header>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <TextBlock Name="SpotifyStatusText" Text="Vérification Spotify..." FontSize="12" VerticalAlignment="Center" Margin="0,0,16,0" FontWeight="Medium" />
+                    <ui:Button Name="SpotifyAuthButton" Content="Se connecter à Spotify" Click="SpotifyAuthButton_Click" Appearance="Primary" />
+                </StackPanel>
+            </ui:CardControl>
+
             <!-- Deezer CDP Status card -->
-            <ui:CardControl x:Name="DeezerCdpTitleCard" Grid.Row="5" Icon="{ui:SymbolIcon Desktop20}" Margin="0,12,0,76">
+            <ui:CardControl x:Name="DeezerCdpTitleCard" Grid.Row="6" Icon="{ui:SymbolIcon Desktop20}" Margin="0,0,0,76">
                 <ui:CardControl.Header>
                     <StackPanel Orientation="Vertical">
                         <TextBlock Text="Intégration Deezer Desktop (Direct CDP ⚡)" FontSize="14" FontWeight="Regular" VerticalAlignment="Center" />

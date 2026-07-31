@@ -15,6 +15,45 @@ public partial class QueueSettingsPage : Page
         InitializeComponent();
         DataContext = SettingsManager.Current;
         UpdateCdpStatusAsync();
+        UpdateSpotifyStatusAsync();
+    }
+
+    private async void UpdateSpotifyStatusAsync()
+    {
+        if (SpotifyStatusText == null || SpotifyAuthButton == null) return;
+
+        bool isAuth = SpotifyAuthService.IsAuthenticated;
+        if (isAuth)
+        {
+            SpotifyStatusText.Text = "Statut : Connecté à Spotify 🟢";
+            SpotifyStatusText.Foreground = (System.Windows.Media.Brush)Application.Current.TryFindResource("MicaWPF.Brushes.SystemAccentColorPrimary") ?? System.Windows.Media.Brushes.Green;
+            SpotifyAuthButton.Content = "Se déconnecter de Spotify";
+        }
+        else
+        {
+            SpotifyStatusText.Text = "Statut : Non connecté";
+            SpotifyStatusText.Foreground = System.Windows.Media.Brushes.Gray;
+            SpotifyAuthButton.Content = "Se connecter à Spotify";
+        }
+    }
+
+    private async void SpotifyAuthButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (SpotifyAuthButton == null) return;
+
+        if (SpotifyAuthService.IsAuthenticated)
+        {
+            SpotifyAuthService.Logout();
+            UpdateSpotifyStatusAsync();
+        }
+        else
+        {
+            SpotifyAuthButton.IsEnabled = false;
+            SpotifyStatusText.Text = "Connexion en cours dans votre navigateur...";
+            bool success = await SpotifyAuthService.AuthenticateAsync();
+            UpdateSpotifyStatusAsync();
+            SpotifyAuthButton.IsEnabled = true;
+        }
     }
 
     private async void UpdateCdpStatusAsync()

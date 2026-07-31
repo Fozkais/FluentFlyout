@@ -279,6 +279,17 @@ public partial class TaskbarWidgetControl : UserControl
         // Launch (or restart with CDP) Deezer Desktop!
         if (string.IsNullOrEmpty(_actualTitle) && string.IsNullOrEmpty(_actualArtist))
         {
+            if (SettingsManager.Current.PreferredMusicService == "Spotify" || (!SettingsManager.Current.DeezerQueueEnabled && SpotifyAuthService.IsAuthenticated))
+            {
+                if (_isLaunchingDeezer) return;
+                _isLaunchingDeezer = true;
+                SetLoadingState(true);
+                _ = Task.Run(async () =>
+                {
+                    await SpotifyService.EnsureSpotifyRunningAsync();
+                });
+                return;
+            }
             if (SettingsManager.Current.DeezerQueueEnabled)
             {
                 if (_isLaunchingDeezer) return;
@@ -699,7 +710,7 @@ public partial class TaskbarWidgetControl : UserControl
 
     private async Task UpdateQueueButtonVisibilityAsync()
     {
-        if (!SettingsManager.Current.DeezerQueueEnabled)
+        if (!SettingsManager.Current.DeezerQueueEnabled && !SettingsManager.Current.SpotifyQueueEnabled)
         {
             Dispatcher.Invoke(() => QueueButton.Visibility = Visibility.Collapsed);
             return;
@@ -708,11 +719,13 @@ public partial class TaskbarWidgetControl : UserControl
         var session = _mainWindow?.GetActiveMediaSession();
         string appId = session?.ControlSession?.SourceAppUserModelId ?? "";
         bool isDeezer = appId.Contains("deezer", StringComparison.OrdinalIgnoreCase);
+        bool isSpotify = appId.Contains("spotify", StringComparison.OrdinalIgnoreCase);
         bool isCdpAvailable = await DeezerCdpService.IsCdpAvailableAsync();
+        bool isSpotifyAvailable = SpotifyAuthService.IsAuthenticated;
 
         Dispatcher.Invoke(() =>
         {
-            QueueButton.Visibility = (isDeezer || isCdpAvailable) ? Visibility.Visible : Visibility.Collapsed;
+            QueueButton.Visibility = (isDeezer || isSpotify || isCdpAvailable || isSpotifyAvailable) ? Visibility.Visible : Visibility.Collapsed;
         });
     }
 
@@ -770,6 +783,12 @@ public partial class TaskbarWidgetControl : UserControl
         {
             await focusedSession.ControlSession.TrySkipPreviousAsync();
         }
+        else if (SpotifyAuthService.IsAuthenticated && (SettingsManager.Current.PreferredMusicService == "Spotify" || !SettingsManager.Current.DeezerQueueEnabled))
+        {
+            await SpotifyService.PrevTrackAsync();
+            await Task.Delay(300);
+            _mainWindow.ForceRefreshTaskbarWidget();
+        }
         else if (SettingsManager.Current.DeezerQueueEnabled && await DeezerCdpService.IsCdpAvailableAsync())
         {
             await DeezerCdpService.PrevTrackAsync();
@@ -787,6 +806,12 @@ public partial class TaskbarWidgetControl : UserControl
         {
             await focusedSession.ControlSession.TryTogglePlayPauseAsync();
         }
+        else if (SpotifyAuthService.IsAuthenticated && (SettingsManager.Current.PreferredMusicService == "Spotify" || !SettingsManager.Current.DeezerQueueEnabled))
+        {
+            await SpotifyService.TogglePlayPauseAsync();
+            await Task.Delay(300);
+            _mainWindow.ForceRefreshTaskbarWidget();
+        }
         else if (SettingsManager.Current.DeezerQueueEnabled && await DeezerCdpService.IsCdpAvailableAsync())
         {
             await DeezerCdpService.TogglePlayPauseAsync();
@@ -803,6 +828,12 @@ public partial class TaskbarWidgetControl : UserControl
         if (focusedSession != null)
         {
             await focusedSession.ControlSession.TrySkipNextAsync();
+        }
+        else if (SpotifyAuthService.IsAuthenticated && (SettingsManager.Current.PreferredMusicService == "Spotify" || !SettingsManager.Current.DeezerQueueEnabled))
+        {
+            await SpotifyService.NextTrackAsync();
+            await Task.Delay(300);
+            _mainWindow.ForceRefreshTaskbarWidget();
         }
         else if (SettingsManager.Current.DeezerQueueEnabled && await DeezerCdpService.IsCdpAvailableAsync())
         {
