@@ -15,9 +15,9 @@ public static class SpotifyAuthService
 {
     private static readonly NLog.Logger Logger = NLog.LogManager.GetCurrentClassLogger();
 
-    // Default Spotify Client ID for FluentFlyout PKCE (No client secret required)
-    public const string DefaultClientId = "5f3a0937a0e24177b960b730ca7b415a"; 
-    private const string RedirectUri = "http://localhost:8888/spotify-callback/";
+    // Public Spotify PKCE Client ID (No client secret required)
+    public const string DefaultClientId = "65b708073fc0480ea92a077233ca87bd"; 
+    private const string RedirectUri = "http://localhost:8888/callback/";
 
     public static bool IsAuthenticated => !string.IsNullOrEmpty(SettingsManager.Current.SpotifyRefreshToken);
 
@@ -39,6 +39,7 @@ public static class SpotifyAuthService
 
             using var listener = new HttpListener();
             listener.Prefixes.Add(RedirectUri);
+            listener.Prefixes.Add("http://localhost:8888/spotify-callback/");
             listener.Start();
 
             Process.Start(new ProcessStartInfo
