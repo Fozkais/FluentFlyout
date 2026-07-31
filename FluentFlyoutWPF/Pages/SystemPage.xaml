@@ -202,17 +202,21 @@
                 <ui:CardControl.Header>
                     <StackPanel Orientation="Vertical">
                         <TextBlock Text="Intégration Spotify (Web API 🟢)" FontSize="14" FontWeight="Regular" VerticalAlignment="Center" />
-                        <TextBlock Text="Connexion OAuth 2.0 PKCE à l'API Spotify. Vous pouvez renseigner votre Client ID Spotify ci-dessous si nécessaire." FontSize="12" Opacity="0.5" />
+                        <TextBlock Text="Contrôle direct via GSMTC inclus sans configuration. Pour la file d'attente et playlists Web API, renseignez votre Client ID." FontSize="12" Opacity="0.5" />
+                        <TextBlock FontSize="11" Opacity="0.6" Margin="0,2,0,0">
+                            URI de redirection à ajouter sur Spotify : <Run FontWeight="SemiBold" Text="http://localhost:8888/spotify-callback/" />
+                        </TextBlock>
                     </StackPanel>
                 </ui:CardControl.Header>
                 <StackPanel Orientation="Vertical" HorizontalAlignment="Right" VerticalAlignment="Center">
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8" HorizontalAlignment="Right">
                         <TextBlock Name="SpotifyStatusText" Text="Vérification Spotify..." FontSize="12" VerticalAlignment="Center" Margin="0,0,16,0" FontWeight="Medium" />
+                        <ui:Button Name="CreateAppButton" Content="Dashboard Spotify ↗" Click="CreateAppButton_Click" Margin="0,0,8,0" />
                         <ui:Button Name="SpotifyAuthButton" Content="Se connecter à Spotify" Click="SpotifyAuthButton_Click" Appearance="Primary" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                         <TextBlock Text="Client ID :" FontSize="11" Opacity="0.6" VerticalAlignment="Center" Margin="0,0,8,0" />
-                        <ui:TextBox Width="210" PlaceholderText="Client ID Spotify (ex: 5f3a...)" Text="{Binding SpotifyClientId, Mode=TwoWay}" FontSize="11" />
+                        <ui:TextBox Width="240" PlaceholderText="Collez votre Client ID Spotify ici" Text="{Binding SpotifyClientId, Mode=TwoWay}" FontSize="11" />
                     </StackPanel>
                 </StackPanel>
             </ui:CardControl>

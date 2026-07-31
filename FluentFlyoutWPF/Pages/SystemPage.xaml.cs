@@ -74,6 +74,22 @@ public partial class SystemPage : Page
         }
     }
 
+    private void CreateAppButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "https://developer.spotify.com/dashboard",
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Failed to open Spotify developer dashboard");
+        }
+    }
+
     private async void SpotifyAuthButton_Click(object sender, RoutedEventArgs e)
     {
         if (SpotifyAuthButton == null) return;
@@ -85,6 +101,12 @@ public partial class SystemPage : Page
         }
         else
         {
+            if (string.IsNullOrWhiteSpace(SettingsManager.Current.SpotifyClientId))
+            {
+                System.Windows.MessageBox.Show("Veuillez renseigner votre Client ID Spotify dans le champ prévu à cet effet avant de vous connecter.\n\nVous pouvez en créer un gratuitement sur le Dashboard Spotify (bouton Dashboard Spotify ↗).", "Client ID requis", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
             SpotifyAuthButton.IsEnabled = false;
             SpotifyStatusText.Text = "Connexion en cours...";
             bool success = await SpotifyAuthService.AuthenticateAsync();
