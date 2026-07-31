@@ -137,6 +137,8 @@ public static class SpotifyService
         }
     }
 
+    public static string? LastActiveContextUri { get; set; }
+
     public static async Task<List<SpotifyTrack>?> GetQueueAsync()
     {
         string? token = await SpotifyAuthService.GetValidAccessTokenAsync();
@@ -147,6 +149,22 @@ public static class SpotifyService
             using var client = new HttpClient();
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
+            // 1. Check player state for active context (playlist / album)
+            var playerRes = await client.GetAsync("https://api.spotify.com/v1/me/player");
+            if (playerRes.IsSuccessStatusCode)
+            {
+                string pJson = await playerRes.Content.ReadAsStringAsync();
+                using var pDoc = JsonDocument.Parse(pJson);
+                if (pDoc.RootElement.TryGetProperty("context", out var ctxProp) &&
+                    ctxProp.ValueKind == JsonValueKind.Object &&
+                    ctxProp.TryGetProperty("uri", out var uriProp))
+                {
+                    string ctxUri = uriProp.GetString() ?? "";
+                    if (!string.IsNullOrEmpty(ctxUri)) LastActiveContextUri = ctxUri;
+                }
+            }
+
+            // 2. Fetch standard player queue
             var res = await client.GetAsync("https://api.spotify.com/v1/me/player/queue");
             if (!res.IsSuccessStatusCode) return null;
 
@@ -209,8 +227,13 @@ public static class SpotifyService
                     string name = p.TryGetProperty("name", out var nameProp) ? nameProp.GetString() ?? "" : "";
 
                     int trackCount = 0;
-                    if (p.TryGetProperty("tracks", out var tracksProp) && tracksProp.TryGetProperty("total", out var totalProp))
-                        trackCount = totalProp.GetInt32();
+                    if (p.TryGetProperty("tracks", out var tracksProp))
+                    {
+                        if (tracksProp.ValueKind == JsonValueKind.Number)
+                            trackCount = tracksProp.GetInt32();
+                        else if (tracksProp.ValueKind == JsonValueKind.Object && tracksProp.TryGetProperty("total", out var totalProp) && totalProp.ValueKind == JsonValueKind.Number)
+                            trackCount = totalProp.GetInt32();
+                    }
 
                     string coverUrl = "";
                     if (p.TryGetProperty("images", out var imagesArr) && imagesArr.ValueKind == JsonValueKind.Array && imagesArr.GetArrayLength() > 0)
@@ -243,6 +266,7 @@ public static class SpotifyService
 
         try
         {
+            LastActiveContextUri = contextUri;
             using var client = new HttpClient();
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
@@ -260,7 +284,7 @@ public static class SpotifyService
         }
     }
 
-    public static async Task<bool> PlayTrackUriAsync(string trackUri)
+    public static async Task<bool> PlayTrackUriAsync(string trackUri, string? contextUri = null, List<SpotifyTrack>? fullQueue = null, int targetIndex = -1)
     {
         string? token = await SpotifyAuthService.GetValidAccessTokenAsync();
         if (string.IsNullOrEmpty(token)) return false;
@@ -270,11 +294,48 @@ public static class SpotifyService
             using var client = new HttpClient();
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-            var bodyObj = new { uris = new[] { trackUri } };
+            string activeCtx = !string.IsNullOrEmpty(contextUri) ? contextUri : (LastActiveContextUri ?? "");
+
+            object bodyObj;
+            if (!string.IsNullOrEmpty(activeCtx))
+            {
+                bodyObj = new
+                {
+                    context_uri = activeCtx,
+                    offset = new { uri = trackUri }
+                };
+            }
+            else if (fullQueue != null && targetIndex >= 0 && targetIndex < fullQueue.Count)
+            {
+                var remainingUris = fullQueue.Skip(targetIndex).Select(t => t.Uri).Where(u => !string.IsNullOrEmpty(u)).ToArray();
+                if (remainingUris.Length > 0)
+                    bodyObj = new { uris = remainingUris };
+                else
+                    bodyObj = new { uris = new[] { trackUri } };
+            }
+            else
+            {
+                bodyObj = new { uris = new[] { trackUri } };
+            }
+
             string bodyJson = JsonSerializer.Serialize(bodyObj);
             var content = new StringContent(bodyJson, Encoding.UTF8, "application/json");
 
             var res = await client.PutAsync("https://api.spotify.com/v1/me/player/play", content);
+
+            // Fallback if context_uri offset failed (e.g. track not found in context)
+            if (!res.IsSuccessStatusCode && !string.IsNullOrEmpty(activeCtx) && fullQueue != null && targetIndex >= 0)
+            {
+                var remainingUris = fullQueue.Skip(targetIndex).Select(t => t.Uri).Where(u => !string.IsNullOrEmpty(u)).ToArray();
+                if (remainingUris.Length > 0)
+                {
+                    bodyObj = new { uris = remainingUris };
+                    bodyJson = JsonSerializer.Serialize(bodyObj);
+                    content = new StringContent(bodyJson, Encoding.UTF8, "application/json");
+                    res = await client.PutAsync("https://api.spotify.com/v1/me/player/play", content);
+                }
+            }
+
             return res.IsSuccessStatusCode;
         }
         catch (Exception ex)

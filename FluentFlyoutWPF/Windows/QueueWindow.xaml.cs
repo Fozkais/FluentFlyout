@@ -206,8 +206,11 @@ public partial class QueueWindow : MicaWindow
         }
         else
         {
-            // Pre-warm Deezer CDP debug port in background
-            _ = DeezerCdpService.EnsureDeezerRunningWithDebugPortAsync();
+            // Pre-warm Deezer CDP debug port in background ONLY if Deezer is enabled
+            if (SettingsManager.Current.DeezerQueueEnabled)
+            {
+                _ = DeezerCdpService.EnsureDeezerRunningWithDebugPortAsync();
+            }
             var newTracks = await DeezerService.GetQueueAsync(currentTitle, currentArtist, forceRefresh);
             _fullQueue = newTracks ?? new List<DeezerTrack>();
             _contextSource = DeezerService.LastQueueSource;
@@ -306,6 +309,7 @@ public partial class QueueWindow : MicaWindow
 
         if (isSpotifyActive && SpotifyAuthService.IsAuthenticated)
         {
+            PlaylistSelectorTitle.Text = "Vos Playlists Spotify";
             var sPlaylists = await SpotifyService.GetUserPlaylistsAsync();
             PlaylistLoadingBar.Visibility = Visibility.Collapsed;
             if (sPlaylists != null)
@@ -321,6 +325,7 @@ public partial class QueueWindow : MicaWindow
         }
         else
         {
+            PlaylistSelectorTitle.Text = "Vos Playlists Deezer";
             var playlists = await DeezerCdpService.GetUserPlaylistsAsync();
             PlaylistLoadingBar.Visibility = Visibility.Collapsed;
             PlaylistListView.ItemsSource = playlists;
@@ -415,8 +420,11 @@ public partial class QueueWindow : MicaWindow
                 DeezerService.UpdateCache(_fullQueue);
             }
 
-            // 2. Perform CDP removal asynchronously in background
-            await DeezerCdpService.RemoveTrackAsync(targetIndexToRemove);
+            // 2. Perform CDP removal ONLY for Deezer
+            if (_contextSource != "Spotify")
+            {
+                await DeezerCdpService.RemoveTrackAsync(targetIndexToRemove);
+            }
         }
     }
 
@@ -436,7 +444,12 @@ public partial class QueueWindow : MicaWindow
         if (_contextSource == "Spotify" || SpotifyAuthService.IsAuthenticated && (track.Id.Length == 22 || track.Id.StartsWith("spotify:")))
         {
             string trackUri = track.Id.StartsWith("spotify:") ? track.Id : $"spotify:track:{track.Id}";
-            _ = SpotifyService.PlayTrackUriAsync(trackUri);
+            var sQueue = _fullQueue.Select(t => new SpotifyService.SpotifyTrack
+            {
+                Uri = t.Id.StartsWith("spotify:") ? t.Id : $"spotify:track:{t.Id}"
+            }).ToList();
+
+            _ = SpotifyService.PlayTrackUriAsync(trackUri, SpotifyService.LastActiveContextUri, sQueue, track.TargetIndex);
         }
         else if (track.TargetIndex >= 0)
         {
@@ -550,8 +563,11 @@ public partial class QueueWindow : MicaWindow
                     ApplyFilter();
                     DeezerService.UpdateCache(_fullQueue);
 
-                    // 2. Perform CDP reorder asynchronously in background
-                    await DeezerCdpService.MoveTrackAsync(fromIndex, toIndex);
+                    // 2. Perform CDP reorder ONLY for Deezer
+                    if (_contextSource != "Spotify")
+                    {
+                        await DeezerCdpService.MoveTrackAsync(fromIndex, toIndex);
+                    }
                 }
             }
         }

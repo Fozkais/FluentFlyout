@@ -677,7 +677,7 @@ public partial class MainWindow : MicaWindow
 
                     taskbarWindow?.UpdateUi(tbSongInfo.Title, tbSongInfo.Artist, tbThumbnail, tbPlayback?.PlaybackStatus, tbPlayback?.Controls);
                 }
-                else if (SettingsManager.Current.DeezerQueueEnabled && await DeezerCdpService.IsCdpAvailableAsync())
+                else if (SettingsManager.Current.PreferredMusicService != "Spotify" && SettingsManager.Current.DeezerQueueEnabled && await DeezerCdpService.IsCdpAvailableAsync())
                 {
                     var cdpSong = await DeezerCdpService.GetCurrentSongAsync();
                     if (cdpSong != null && !string.IsNullOrEmpty(cdpSong.Title))
