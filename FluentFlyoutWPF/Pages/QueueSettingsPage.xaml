@@ -14,24 +14,30 @@
       d:Background="White">
 
     <StackPanel MaxWidth="1000" Margin="16">
-        <TextBlock Text="File d'attente Deezer" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,20" />
+        <TextBlock Text="File d'attente &amp; Services Média" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,20" />
 
-        <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,24">
+            <ui:SymbolIcon Symbol="List20" FontSize="48" Margin="0,0,16,0" VerticalAlignment="Center" />
+            <TextBlock FontSize="14" FontWeight="Regular" HorizontalAlignment="Stretch" Opacity="0.75" MaxWidth="600" TextWrapping="WrapWithOverflow" Text="La fenêtre de file d'attente se connecte en direct à vos lecteurs de musique (Deezer, Spotify). Vous pouvez contrôler la lecture de n'importe quel morceau et personnaliser son comportement d'affichage." />
+        </StackPanel>
 
-            <StackPanel Orientation="Horizontal" Margin="0,0,0,24">
-                <ui:SymbolIcon Symbol="List20" FontSize="48" Margin="0,0,16,0" VerticalAlignment="Center" />
-                <TextBlock FontSize="14" FontWeight="Regular" HorizontalAlignment="Stretch" Opacity="0.75" MaxWidth="550" TextWrapping="WrapWithOverflow" Text="La fenêtre de file d'attente se connecte en direct au lecteur Deezer Desktop via CDP. Vous pouvez contrôler la lecture de n'importe quel morceau et personnaliser son comportement d'affichage." />
-            </StackPanel>
+        <StackPanel Orientation="Vertical">
+            <!-- Preferred Music Service Card -->
+            <ui:CardControl Icon="{ui:SymbolIcon MusicNote220}" Margin="0,0,0,12">
+                <ui:CardControl.Header>
+                    <StackPanel Orientation="Vertical">
+                        <TextBlock Text="Lecteur de musique préféré" FontSize="14" FontWeight="Regular" VerticalAlignment="Center" />
+                        <TextBlock Text="Choisissez le service de musique prioritaire pour le widget et la file d'attente" FontSize="12" Opacity="0.5" />
+                    </StackPanel>
+                </ui:CardControl.Header>
+                <ComboBox x:Name="PreferredServiceComboBox" Width="200" SelectionChanged="PreferredServiceComboBox_SelectionChanged">
+                    <ComboBoxItem Content="Détection automatique" Tag="Auto" />
+                    <ComboBoxItem Content="Deezer Desktop (CDP)" Tag="Deezer" />
+                    <ComboBoxItem Content="Spotify (Web API)" Tag="Spotify" />
+                </ComboBox>
+            </ui:CardControl>
 
-            <ui:CardControl Icon="{ui:SymbolIcon List20}" Grid.Row="1" Margin="0,0,0,12">
+            <ui:CardControl Icon="{ui:SymbolIcon List20}" Margin="0,0,0,12">
                 <ui:CardControl.Header>
                     <StackPanel Orientation="Vertical">
                         <TextBlock Text="Activer la file d'attente" FontSize="14" FontWeight="Regular" VerticalAlignment="Center" />
@@ -41,7 +47,7 @@
                 <controls:ToggleSwitch IsChecked="{Binding DeezerQueueEnabled, Mode=TwoWay}" />
             </ui:CardControl>
 
-            <ui:CardControl Icon="{ui:SymbolIcon Dismiss20}" Grid.Row="2" Margin="0,0,0,12">
+            <ui:CardControl Icon="{ui:SymbolIcon Dismiss20}" Margin="0,0,0,12">
                 <ui:CardControl.Header>
                     <StackPanel Orientation="Vertical">
                         <TextBlock Text="Fermer automatiquement lorsque la souris s'éloigne" FontSize="14" FontWeight="Regular" VerticalAlignment="Center" />
@@ -55,7 +61,7 @@
                 </StackPanel>
             </ui:CardControl>
 
-            <ui:CardControl Icon="{ui:SymbolIcon Play20}" Grid.Row="3" Margin="0,0,0,12">
+            <ui:CardControl Icon="{ui:SymbolIcon Play20}" Margin="0,0,0,12">
                 <ui:CardControl.Header>
                     <StackPanel Orientation="Vertical">
                         <TextBlock Text="Fermer la file d'attente lors du clic sur une musique" FontSize="14" FontWeight="Regular" VerticalAlignment="Center" />
@@ -65,7 +71,7 @@
                 <controls:ToggleSwitch IsChecked="{Binding QueueCloseOnTrackClick, Mode=TwoWay}" />
             </ui:CardControl>
 
-            <ui:CardControl Icon="{ui:SymbolIcon Library20}" Grid.Row="4" Margin="0,0,0,12">
+            <ui:CardControl Icon="{ui:SymbolIcon Library20}" Margin="0,0,0,12">
                 <ui:CardControl.Header>
                     <StackPanel Orientation="Vertical">
                         <TextBlock Text="Afficher le sélecteur de playlists" FontSize="14" FontWeight="Regular" VerticalAlignment="Center" />
@@ -76,7 +82,7 @@
             </ui:CardControl>
 
             <!-- Spotify Integration card -->
-            <ui:CardControl x:Name="SpotifyCard" Grid.Row="5" Icon="{ui:SymbolIcon Music20}" Margin="0,12,0,12">
+            <ui:CardControl x:Name="SpotifyCard" Icon="{ui:SymbolIcon MusicNote220}" Margin="0,12,0,12">
                 <ui:CardControl.Header>
                     <StackPanel Orientation="Vertical">
                         <TextBlock Text="Intégration Spotify (Web API 🟢)" FontSize="14" FontWeight="Regular" VerticalAlignment="Center" />
@@ -90,7 +96,7 @@
             </ui:CardControl>
 
             <!-- Deezer CDP Status card -->
-            <ui:CardControl x:Name="DeezerCdpTitleCard" Grid.Row="6" Icon="{ui:SymbolIcon Desktop20}" Margin="0,0,0,76">
+            <ui:CardControl x:Name="DeezerCdpTitleCard" Icon="{ui:SymbolIcon Desktop20}" Margin="0,0,0,76">
                 <ui:CardControl.Header>
                     <StackPanel Orientation="Vertical">
                         <TextBlock Text="Intégration Deezer Desktop (Direct CDP ⚡)" FontSize="14" FontWeight="Regular" VerticalAlignment="Center" />
@@ -102,6 +108,6 @@
                     <ui:Button Name="TestCdpButton" Content="Vérifier / Lancer Deezer CDP" Click="TestCdpButton_Click" Appearance="Primary" />
                 </StackPanel>
             </ui:CardControl>
-        </Grid>
+        </StackPanel>
     </StackPanel>
 </Page>

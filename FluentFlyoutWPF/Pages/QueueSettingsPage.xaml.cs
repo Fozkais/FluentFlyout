@@ -14,8 +14,36 @@ public partial class QueueSettingsPage : Page
     {
         InitializeComponent();
         DataContext = SettingsManager.Current;
+        InitPreferredServiceComboBox();
         UpdateCdpStatusAsync();
         UpdateSpotifyStatusAsync();
+    }
+
+    private void InitPreferredServiceComboBox()
+    {
+        if (PreferredServiceComboBox == null) return;
+        string preferred = SettingsManager.Current.PreferredMusicService;
+        foreach (ComboBoxItem item in PreferredServiceComboBox.Items)
+        {
+            if (item.Tag?.ToString() == preferred)
+            {
+                PreferredServiceComboBox.SelectedItem = item;
+                break;
+            }
+        }
+        if (PreferredServiceComboBox.SelectedItem == null && PreferredServiceComboBox.Items.Count > 0)
+        {
+            PreferredServiceComboBox.SelectedIndex = 0;
+        }
+    }
+
+    private void PreferredServiceComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (PreferredServiceComboBox?.SelectedItem is ComboBoxItem item && item.Tag != null)
+        {
+            SettingsManager.Current.PreferredMusicService = item.Tag.ToString() ?? "Auto";
+            SettingsManager.SaveSettings();
+        }
     }
 
     private async void UpdateSpotifyStatusAsync()
