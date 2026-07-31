@@ -151,6 +151,7 @@ public static class SpotifyService
 
             string? activeCtxUri = LastActiveContextUri;
             string curTrackUri = "";
+            string curTrackTitle = "";
 
             // 1. Check player state for active context (playlist / album) & currently playing track
             var playerRes = await client.GetAsync("https://api.spotify.com/v1/me/player");
@@ -176,38 +177,18 @@ public static class SpotifyService
                 {
                     if (itemObj.TryGetProperty("uri", out var curUriProp))
                         curTrackUri = curUriProp.GetString() ?? "";
+                    if (itemObj.TryGetProperty("name", out var curNameProp))
+                        curTrackTitle = curNameProp.GetString() ?? "";
                 }
             }
 
             // 2. If context is a Spotify playlist, fetch full 50-100+ playlist tracks!
             if (!string.IsNullOrEmpty(activeCtxUri) && activeCtxUri.StartsWith("spotify:playlist:"))
             {
-                string playlistId = activeCtxUri.Replace("spotify:playlist:", "");
-                var playlistRes = await client.GetAsync($"https://api.spotify.com/v1/playlists/{playlistId}/tracks?limit=100");
-                if (playlistRes.IsSuccessStatusCode)
+                var plTracks = await GetPlaylistTracksAsync(activeCtxUri, curTrackUri, curTrackTitle);
+                if (plTracks != null && plTracks.Count > 0)
                 {
-                    string plJson = await playlistRes.Content.ReadAsStringAsync();
-                    using var plDoc = JsonDocument.Parse(plJson);
-                    if (plDoc.RootElement.TryGetProperty("items", out var itemsArr) && itemsArr.ValueKind == JsonValueKind.Array)
-                    {
-                        var playlistTracks = new List<SpotifyTrack>();
-                        int pIdx = 0;
-                        foreach (var item in itemsArr.EnumerateArray())
-                        {
-                            if (item.TryGetProperty("track", out var trackObj) && trackObj.ValueKind == JsonValueKind.Object)
-                            {
-                                string tUri = trackObj.TryGetProperty("uri", out var uProp) ? uProp.GetString() ?? "" : "";
-                                bool isCur = !string.IsNullOrEmpty(curTrackUri) && tUri == curTrackUri;
-                                var parsed = ParseTrackElement(trackObj, pIdx++, isCurrent: isCur);
-                                if (parsed != null) playlistTracks.Add(parsed);
-                            }
-                        }
-
-                        if (playlistTracks.Count > 0)
-                        {
-                            return playlistTracks;
-                        }
-                    }
+                    return plTracks;
                 }
             }
 
@@ -244,6 +225,77 @@ public static class SpotifyService
             Logger.Error(ex, "Failed to get queue from Spotify Web API");
             return null;
         }
+    }
+
+    public static async Task<List<SpotifyTrack>?> GetPlaylistTracksAsync(string contextUri, string curTrackUri = "", string curTitle = "")
+    {
+        if (string.IsNullOrEmpty(contextUri) || !contextUri.StartsWith("spotify:playlist:")) return null;
+        string playlistId = contextUri.Replace("spotify:playlist:", "");
+
+        string? token = await SpotifyAuthService.GetValidAccessTokenAsync();
+        if (string.IsNullOrEmpty(token)) return null;
+
+        try
+        {
+            using var client = new HttpClient();
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            HttpResponseMessage playlistRes = await client.GetAsync($"https://api.spotify.com/v1/playlists/{playlistId}/tracks?limit=100");
+            if (!playlistRes.IsSuccessStatusCode)
+            {
+                playlistRes = await client.GetAsync($"https://api.spotify.com/v1/playlists/{playlistId}");
+            }
+
+            if (playlistRes.IsSuccessStatusCode)
+            {
+                string plJson = await playlistRes.Content.ReadAsStringAsync();
+                using var plDoc = JsonDocument.Parse(plJson);
+                var root = plDoc.RootElement;
+
+                JsonElement itemsArr = default;
+                bool foundItems = false;
+
+                if (root.TryGetProperty("items", out var iArr) && iArr.ValueKind == JsonValueKind.Array)
+                {
+                    itemsArr = iArr;
+                    foundItems = true;
+                }
+                else if (root.TryGetProperty("tracks", out var tObj) && tObj.TryGetProperty("items", out var tItems) && tItems.ValueKind == JsonValueKind.Array)
+                {
+                    itemsArr = tItems;
+                    foundItems = true;
+                }
+
+                if (foundItems)
+                {
+                    var playlistTracks = new List<SpotifyTrack>();
+                    int pIdx = 0;
+                    foreach (var item in itemsArr.EnumerateArray())
+                    {
+                        JsonElement trackObj = item;
+                        if (item.TryGetProperty("track", out var innerTrack) && innerTrack.ValueKind == JsonValueKind.Object)
+                            trackObj = innerTrack;
+
+                        string tUri = trackObj.TryGetProperty("uri", out var uProp) ? uProp.GetString() ?? "" : "";
+                        string tName = trackObj.TryGetProperty("name", out var nProp) ? nProp.GetString() ?? "" : "";
+
+                        bool isCur = (!string.IsNullOrEmpty(curTrackUri) && tUri == curTrackUri) ||
+                                     (!string.IsNullOrEmpty(curTitle) && tName.Equals(curTitle, StringComparison.OrdinalIgnoreCase));
+
+                        var parsed = ParseTrackElement(trackObj, pIdx++, isCurrent: isCur);
+                        if (parsed != null) playlistTracks.Add(parsed);
+                    }
+
+                    if (playlistTracks.Count > 0) return playlistTracks;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Failed to get playlist tracks from Spotify");
+        }
+
+        return null;
     }
 
     public static async Task<bool> RemoveTrackFromPlaylistAsync(string contextUri, string trackUri, int index)

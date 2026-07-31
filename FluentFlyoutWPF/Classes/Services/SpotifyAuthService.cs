@@ -46,7 +46,7 @@ public static class SpotifyAuthService
             string codeVerifier = GenerateCodeVerifier();
             string codeChallenge = GenerateCodeChallenge(codeVerifier);
 
-            string scope = Uri.EscapeDataString("user-read-playback-state user-modify-playback-state user-read-currently-playing playlist-read-private playlist-read-collaborative");
+            string scope = Uri.EscapeDataString("user-read-playback-state user-modify-playback-state user-read-currently-playing playlist-read-private playlist-read-collaborative playlist-modify-public playlist-modify-private user-library-read user-library-modify");
             string authUrl = $"https://accounts.spotify.com/authorize?response_type=code&client_id={clientId}&scope={scope}&redirect_uri={Uri.EscapeDataString(redirectUri)}&code_challenge_method=S256&code_challenge={codeChallenge}";
 
             using var listener = new HttpListener();
