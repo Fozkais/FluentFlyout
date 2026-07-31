@@ -25,6 +25,7 @@ public partial class QueueWindow : MicaWindow
 
     private System.Windows.Threading.DispatcherTimer? _queueWatcherTimer;
     private string _lastQueueSignature = string.Empty;
+    private bool _isUserModifiedQueue = false;
 
     public QueueWindow(string currentTitle, string currentArtist)
     {
@@ -183,25 +184,41 @@ public partial class QueueWindow : MicaWindow
 
         if (isSpotifyActive && SpotifyAuthService.IsAuthenticated)
         {
-            var sTracks = await SpotifyService.GetQueueAsync();
-            if (sTracks != null)
+            if (_isUserModifiedQueue && _fullQueue.Count > 0)
             {
-                _fullQueue = sTracks.Select(t => new DeezerTrack
+                var curSong = await SpotifyService.GetCurrentSongAsync();
+                if (curSong != null && !string.IsNullOrEmpty(curSong.Title))
                 {
-                    Id = t.Id,
-                    Title = t.Title,
-                    Artist = t.Artist,
-                    Album = t.Album,
-                    CoverUrl = t.CoverUrl,
-                    DurationSeconds = t.DurationSeconds,
-                    TargetIndex = t.TargetIndex,
-                    IsCurrent = t.IsCurrent
-                }).ToList();
+                    foreach (var t in _fullQueue)
+                    {
+                        t.IsCurrent = (t.Title.Equals(curSong.Title, StringComparison.OrdinalIgnoreCase) &&
+                                       t.Artist.Equals(curSong.Artist, StringComparison.OrdinalIgnoreCase));
+                    }
+                }
                 _contextSource = "Spotify";
             }
             else
             {
-                _fullQueue = new List<DeezerTrack>();
+                var sTracks = await SpotifyService.GetQueueAsync();
+                if (sTracks != null)
+                {
+                    _fullQueue = sTracks.Select(t => new DeezerTrack
+                    {
+                        Id = t.Id,
+                        Title = t.Title,
+                        Artist = t.Artist,
+                        Album = t.Album,
+                        CoverUrl = t.CoverUrl,
+                        DurationSeconds = t.DurationSeconds,
+                        TargetIndex = t.TargetIndex,
+                        IsCurrent = t.IsCurrent
+                    }).ToList();
+                    _contextSource = "Spotify";
+                }
+                else
+                {
+                    _fullQueue = new List<DeezerTrack>();
+                }
             }
         }
         else
@@ -339,6 +356,7 @@ public partial class QueueWindow : MicaWindow
             PlaylistListView.SelectedItem = null;
             PlaylistSelectorContainer.Visibility = Visibility.Collapsed;
             LoadingBar.Visibility = Visibility.Visible;
+            _isUserModifiedQueue = false;
 
             if (playlist.Id.StartsWith("spotify:"))
             {
@@ -420,8 +438,17 @@ public partial class QueueWindow : MicaWindow
                 DeezerService.UpdateCache(_fullQueue);
             }
 
-            // 2. Perform CDP removal ONLY for Deezer
-            if (_contextSource != "Spotify")
+            // 2. Perform removal
+            if (_contextSource == "Spotify")
+            {
+                _isUserModifiedQueue = true;
+                if (!string.IsNullOrEmpty(SpotifyService.LastActiveContextUri) && SpotifyService.LastActiveContextUri.StartsWith("spotify:playlist:"))
+                {
+                    string trackUri = track.Id.StartsWith("spotify:") ? track.Id : $"spotify:track:{track.Id}";
+                    _ = SpotifyService.RemoveTrackFromPlaylistAsync(SpotifyService.LastActiveContextUri, trackUri, targetIndexToRemove);
+                }
+            }
+            else
             {
                 await DeezerCdpService.RemoveTrackAsync(targetIndexToRemove);
             }
@@ -563,8 +590,16 @@ public partial class QueueWindow : MicaWindow
                     ApplyFilter();
                     DeezerService.UpdateCache(_fullQueue);
 
-                    // 2. Perform CDP reorder ONLY for Deezer
-                    if (_contextSource != "Spotify")
+                    // 2. Perform reorder
+                    if (_contextSource == "Spotify")
+                    {
+                        _isUserModifiedQueue = true;
+                        if (!string.IsNullOrEmpty(SpotifyService.LastActiveContextUri) && SpotifyService.LastActiveContextUri.StartsWith("spotify:playlist:"))
+                        {
+                            _ = SpotifyService.ReorderPlaylistTracksAsync(SpotifyService.LastActiveContextUri, fromIndex, toIndex);
+                        }
+                    }
+                    else
                     {
                         await DeezerCdpService.MoveTrackAsync(fromIndex, toIndex);
                     }

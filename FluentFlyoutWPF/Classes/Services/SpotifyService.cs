@@ -149,22 +149,69 @@ public static class SpotifyService
             using var client = new HttpClient();
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-            // 1. Check player state for active context (playlist / album)
+            string? activeCtxUri = LastActiveContextUri;
+            string curTrackUri = "";
+
+            // 1. Check player state for active context (playlist / album) & currently playing track
             var playerRes = await client.GetAsync("https://api.spotify.com/v1/me/player");
             if (playerRes.IsSuccessStatusCode)
             {
                 string pJson = await playerRes.Content.ReadAsStringAsync();
                 using var pDoc = JsonDocument.Parse(pJson);
-                if (pDoc.RootElement.TryGetProperty("context", out var ctxProp) &&
+                var pRoot = pDoc.RootElement;
+
+                if (pRoot.TryGetProperty("context", out var ctxProp) &&
                     ctxProp.ValueKind == JsonValueKind.Object &&
                     ctxProp.TryGetProperty("uri", out var uriProp))
                 {
                     string ctxUri = uriProp.GetString() ?? "";
-                    if (!string.IsNullOrEmpty(ctxUri)) LastActiveContextUri = ctxUri;
+                    if (!string.IsNullOrEmpty(ctxUri))
+                    {
+                        activeCtxUri = ctxUri;
+                        LastActiveContextUri = ctxUri;
+                    }
+                }
+
+                if (pRoot.TryGetProperty("item", out var itemObj) && itemObj.ValueKind == JsonValueKind.Object)
+                {
+                    if (itemObj.TryGetProperty("uri", out var curUriProp))
+                        curTrackUri = curUriProp.GetString() ?? "";
                 }
             }
 
-            // 2. Fetch standard player queue
+            // 2. If context is a Spotify playlist, fetch full 50-100+ playlist tracks!
+            if (!string.IsNullOrEmpty(activeCtxUri) && activeCtxUri.StartsWith("spotify:playlist:"))
+            {
+                string playlistId = activeCtxUri.Replace("spotify:playlist:", "");
+                var playlistRes = await client.GetAsync($"https://api.spotify.com/v1/playlists/{playlistId}/tracks?limit=100");
+                if (playlistRes.IsSuccessStatusCode)
+                {
+                    string plJson = await playlistRes.Content.ReadAsStringAsync();
+                    using var plDoc = JsonDocument.Parse(plJson);
+                    if (plDoc.RootElement.TryGetProperty("items", out var itemsArr) && itemsArr.ValueKind == JsonValueKind.Array)
+                    {
+                        var playlistTracks = new List<SpotifyTrack>();
+                        int pIdx = 0;
+                        foreach (var item in itemsArr.EnumerateArray())
+                        {
+                            if (item.TryGetProperty("track", out var trackObj) && trackObj.ValueKind == JsonValueKind.Object)
+                            {
+                                string tUri = trackObj.TryGetProperty("uri", out var uProp) ? uProp.GetString() ?? "" : "";
+                                bool isCur = !string.IsNullOrEmpty(curTrackUri) && tUri == curTrackUri;
+                                var parsed = ParseTrackElement(trackObj, pIdx++, isCurrent: isCur);
+                                if (parsed != null) playlistTracks.Add(parsed);
+                            }
+                        }
+
+                        if (playlistTracks.Count > 0)
+                        {
+                            return playlistTracks;
+                        }
+                    }
+                }
+            }
+
+            // 3. Fallback to standard player queue
             var res = await client.GetAsync("https://api.spotify.com/v1/me/player/queue");
             if (!res.IsSuccessStatusCode) return null;
 
@@ -196,6 +243,72 @@ public static class SpotifyService
         {
             Logger.Error(ex, "Failed to get queue from Spotify Web API");
             return null;
+        }
+    }
+
+    public static async Task<bool> RemoveTrackFromPlaylistAsync(string contextUri, string trackUri, int index)
+    {
+        if (string.IsNullOrEmpty(contextUri) || !contextUri.StartsWith("spotify:playlist:")) return false;
+        string playlistId = contextUri.Replace("spotify:playlist:", "");
+
+        string? token = await SpotifyAuthService.GetValidAccessTokenAsync();
+        if (string.IsNullOrEmpty(token)) return false;
+
+        try
+        {
+            using var client = new HttpClient();
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var bodyObj = new
+            {
+                tracks = new[] { new { uri = trackUri, positions = new[] { index } } }
+            };
+            string bodyJson = JsonSerializer.Serialize(bodyObj);
+            var req = new HttpRequestMessage(HttpMethod.Delete, $"https://api.spotify.com/v1/playlists/{playlistId}/tracks")
+            {
+                Content = new StringContent(bodyJson, Encoding.UTF8, "application/json")
+            };
+
+            var res = await client.SendAsync(req);
+            return res.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Failed to remove track from Spotify playlist");
+            return false;
+        }
+    }
+
+    public static async Task<bool> ReorderPlaylistTracksAsync(string contextUri, int rangeStart, int insertBefore)
+    {
+        if (string.IsNullOrEmpty(contextUri) || !contextUri.StartsWith("spotify:playlist:")) return false;
+        string playlistId = contextUri.Replace("spotify:playlist:", "");
+
+        string? token = await SpotifyAuthService.GetValidAccessTokenAsync();
+        if (string.IsNullOrEmpty(token)) return false;
+
+        try
+        {
+            using var client = new HttpClient();
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            int targetInsert = insertBefore > rangeStart ? insertBefore + 1 : insertBefore;
+
+            var bodyObj = new
+            {
+                range_start = rangeStart,
+                insert_before = targetInsert
+            };
+            string bodyJson = JsonSerializer.Serialize(bodyObj);
+            var content = new StringContent(bodyJson, Encoding.UTF8, "application/json");
+
+            var res = await client.PutAsync($"https://api.spotify.com/v1/playlists/{playlistId}/tracks", content);
+            return res.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Failed to reorder Spotify playlist tracks");
+            return false;
         }
     }
 
