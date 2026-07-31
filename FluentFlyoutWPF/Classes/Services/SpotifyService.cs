@@ -240,10 +240,10 @@ public static class SpotifyService
             using var client = new HttpClient();
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-            HttpResponseMessage playlistRes = await client.GetAsync($"https://api.spotify.com/v1/playlists/{playlistId}/tracks?limit=100");
+            HttpResponseMessage playlistRes = await client.GetAsync($"https://api.spotify.com/v1/playlists/{playlistId}");
             if (!playlistRes.IsSuccessStatusCode)
             {
-                playlistRes = await client.GetAsync($"https://api.spotify.com/v1/playlists/{playlistId}");
+                playlistRes = await client.GetAsync($"https://api.spotify.com/v1/playlists/{playlistId}/tracks?limit=100");
             }
 
             if (playlistRes.IsSuccessStatusCode)
@@ -255,15 +255,34 @@ public static class SpotifyService
                 JsonElement itemsArr = default;
                 bool foundItems = false;
 
-                if (root.TryGetProperty("items", out var iArr) && iArr.ValueKind == JsonValueKind.Array)
+                // Check Case 1: root.items (which can be an array or a paging object containing "items" array)
+                if (root.TryGetProperty("items", out var rootItems))
                 {
-                    itemsArr = iArr;
-                    foundItems = true;
+                    if (rootItems.ValueKind == JsonValueKind.Array)
+                    {
+                        itemsArr = rootItems;
+                        foundItems = true;
+                    }
+                    else if (rootItems.ValueKind == JsonValueKind.Object && rootItems.TryGetProperty("items", out var subItems) && subItems.ValueKind == JsonValueKind.Array)
+                    {
+                        itemsArr = subItems;
+                        foundItems = true;
+                    }
                 }
-                else if (root.TryGetProperty("tracks", out var tObj) && tObj.TryGetProperty("items", out var tItems) && tItems.ValueKind == JsonValueKind.Array)
+
+                // Check Case 2: root.tracks
+                if (!foundItems && root.TryGetProperty("tracks", out var tracksProp))
                 {
-                    itemsArr = tItems;
-                    foundItems = true;
+                    if (tracksProp.ValueKind == JsonValueKind.Array)
+                    {
+                        itemsArr = tracksProp;
+                        foundItems = true;
+                    }
+                    else if (tracksProp.ValueKind == JsonValueKind.Object && tracksProp.TryGetProperty("items", out var subTracks) && subTracks.ValueKind == JsonValueKind.Array)
+                    {
+                        itemsArr = subTracks;
+                        foundItems = true;
+                    }
                 }
 
                 if (foundItems)
@@ -272,18 +291,16 @@ public static class SpotifyService
                     int pIdx = 0;
                     foreach (var item in itemsArr.EnumerateArray())
                     {
-                        JsonElement trackObj = item;
-                        if (item.TryGetProperty("track", out var innerTrack) && innerTrack.ValueKind == JsonValueKind.Object)
-                            trackObj = innerTrack;
-
-                        string tUri = trackObj.TryGetProperty("uri", out var uProp) ? uProp.GetString() ?? "" : "";
-                        string tName = trackObj.TryGetProperty("name", out var nProp) ? nProp.GetString() ?? "" : "";
-
-                        bool isCur = (!string.IsNullOrEmpty(curTrackUri) && tUri == curTrackUri) ||
-                                     (!string.IsNullOrEmpty(curTitle) && tName.Equals(curTitle, StringComparison.OrdinalIgnoreCase));
-
-                        var parsed = ParseTrackElement(trackObj, pIdx++, isCurrent: isCur);
-                        if (parsed != null) playlistTracks.Add(parsed);
+                        var parsed = ParseTrackElement(item, pIdx++, isCurrent: false);
+                        if (parsed != null)
+                        {
+                            if ((!string.IsNullOrEmpty(curTrackUri) && parsed.Uri == curTrackUri) ||
+                                (!string.IsNullOrEmpty(curTitle) && parsed.Title.Equals(curTitle, StringComparison.OrdinalIgnoreCase)))
+                            {
+                                parsed.IsCurrent = true;
+                            }
+                            playlistTracks.Add(parsed);
+                        }
                     }
 
                     if (playlistTracks.Count > 0) return playlistTracks;
@@ -647,13 +664,19 @@ public static class SpotifyService
     {
         if (item.ValueKind == JsonValueKind.Null) return null;
 
-        string id = item.TryGetProperty("id", out var idProp) ? idProp.GetString() ?? "" : "";
-        string uri = item.TryGetProperty("uri", out var uriProp) ? uriProp.GetString() ?? "" : "";
-        string title = item.TryGetProperty("name", out var nameProp) ? nameProp.GetString() ?? "" : "";
-        int durationMs = item.TryGetProperty("duration_ms", out var durProp) ? durProp.GetInt32() : 0;
+        JsonElement target = item;
+        if (item.TryGetProperty("item", out var innerItem) && innerItem.ValueKind == JsonValueKind.Object)
+            target = innerItem;
+        else if (item.TryGetProperty("track", out var innerTrack) && innerTrack.ValueKind == JsonValueKind.Object)
+            target = innerTrack;
+
+        string id = target.TryGetProperty("id", out var idProp) ? idProp.GetString() ?? "" : "";
+        string uri = target.TryGetProperty("uri", out var uriProp) ? uriProp.GetString() ?? "" : "";
+        string title = target.TryGetProperty("name", out var nameProp) ? nameProp.GetString() ?? "" : "";
+        int durationMs = target.TryGetProperty("duration_ms", out var durProp) ? durProp.GetInt32() : 0;
 
         string artist = "";
-        if (item.TryGetProperty("artists", out var artistsArr) && artistsArr.ValueKind == JsonValueKind.Array)
+        if (target.TryGetProperty("artists", out var artistsArr) && artistsArr.ValueKind == JsonValueKind.Array)
         {
             var names = new List<string>();
             foreach (var a in artistsArr.EnumerateArray())
@@ -665,7 +688,7 @@ public static class SpotifyService
 
         string album = "";
         string coverUrl = "";
-        if (item.TryGetProperty("album", out var albumProp))
+        if (target.TryGetProperty("album", out var albumProp))
         {
             album = albumProp.TryGetProperty("name", out var albName) ? albName.GetString() ?? "" : "";
             if (albumProp.TryGetProperty("images", out var imagesArr) && imagesArr.ValueKind == JsonValueKind.Array && imagesArr.GetArrayLength() > 0)
