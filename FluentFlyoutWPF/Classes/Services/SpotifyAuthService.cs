@@ -17,16 +17,19 @@ public static class SpotifyAuthService
 
     // Public Spotify PKCE Client ID (No client secret required)
     public const string DefaultClientId = "65b708073fc0480ea92a077233ca87bd"; 
-    private const string RedirectUri = "http://localhost:8888/callback/";
+    private const string RedirectUri = "http://localhost:8888/spotify-callback/";
 
     public static bool IsAuthenticated => !string.IsNullOrEmpty(SettingsManager.Current.SpotifyRefreshToken);
 
     public static async Task<bool> AuthenticateAsync(string? customClientId = null)
     {
+        string configuredId = SettingsManager.Current.SpotifyClientId?.Trim() ?? "";
+        if (configuredId == "5f3a0937a0e24177b960b730ca7b415a") configuredId = "";
+
         string clientId = !string.IsNullOrWhiteSpace(customClientId)
             ? customClientId.Trim()
-            : (!string.IsNullOrWhiteSpace(SettingsManager.Current.SpotifyClientId)
-                ? SettingsManager.Current.SpotifyClientId.Trim()
+            : (!string.IsNullOrWhiteSpace(configuredId)
+                ? configuredId
                 : DefaultClientId);
 
         try
@@ -38,7 +41,7 @@ public static class SpotifyAuthService
             string authUrl = $"https://accounts.spotify.com/authorize?response_type=code&client_id={clientId}&scope={scope}&redirect_uri={Uri.EscapeDataString(RedirectUri)}&code_challenge_method=S256&code_challenge={codeChallenge}";
 
             using var listener = new HttpListener();
-            listener.Prefixes.Add(RedirectUri);
+            listener.Prefixes.Add("http://localhost:8888/callback/");
             listener.Prefixes.Add("http://localhost:8888/spotify-callback/");
             listener.Start();
 
