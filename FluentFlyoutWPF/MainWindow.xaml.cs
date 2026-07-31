@@ -969,8 +969,20 @@ public partial class MainWindow : MicaWindow
     public async void ShowMediaFlyout(bool toggleMode = false, bool forceShow = false)
     {
         var activeSession = GetActiveMediaSession();
-        if (activeSession == null ||
-            (!forceShow && !SettingsManager.Current.MediaFlyoutEnabled) ||
+        DeezerCdpService.DeezerCurrentSong? cdpSong = null;
+
+        if (activeSession == null && SettingsManager.Current.DeezerQueueEnabled && await DeezerCdpService.IsCdpAvailableAsync())
+        {
+            cdpSong = await DeezerCdpService.GetCurrentSongAsync();
+        }
+
+        if (activeSession == null && (cdpSong == null || string.IsNullOrEmpty(cdpSong.Title)))
+        {
+            if (!forceShow || !SettingsManager.Current.MediaFlyoutEnabled || FullscreenDetector.IsFullscreenApplicationRunning())
+                return;
+        }
+
+        if ((!forceShow && !SettingsManager.Current.MediaFlyoutEnabled) ||
             FullscreenDetector.IsFullscreenApplicationRunning())
             return;
 
@@ -990,9 +1002,21 @@ public partial class MainWindow : MicaWindow
             return;
         }
 
-        UpdateUI(activeSession);
-        if (_seekBarEnabled)
-            HandlePlayBackState(activeSession.ControlSession.GetPlaybackInfo().PlaybackStatus);
+        if (activeSession != null)
+        {
+            UpdateUI(activeSession);
+            if (_seekBarEnabled)
+                HandlePlayBackState(activeSession.ControlSession.GetPlaybackInfo().PlaybackStatus);
+        }
+        else if (cdpSong != null && !string.IsNullOrEmpty(cdpSong.Title))
+        {
+            UpdateUiFromCdp(cdpSong);
+            var status = cdpSong.IsPlaying 
+                ? GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing 
+                : GlobalSystemMediaTransportControlsSessionPlaybackStatus.Paused;
+            if (_seekBarEnabled)
+                HandlePlayBackState(status);
+        }
 
         if (nextUpWindow != null) // close NextUpWindow if it's open
         {
@@ -1357,28 +1381,138 @@ public partial class MainWindow : MicaWindow
         _alwaysDisplay = SettingsManager.Current.MediaFlyoutAlwaysDisplay;
     }
 
+    public void UpdateUiFromCdp(DeezerCdpService.DeezerCurrentSong cdpSong)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            UpdateMediaFlyoutCloseButtonVisibility();
+            this.EnableBackdrop();
+
+            if (cdpSong == null || string.IsNullOrEmpty(cdpSong.Title))
+            {
+                SongTitle.Text = "No media playing";
+                SongArtist.Text = string.Empty;
+                SongImage.ImageSource = null;
+                SymbolPlayPause.Symbol = Wpf.Ui.Controls.SymbolRegular.Stop16;
+                ControlPlayPause.IsEnabled = false;
+                ControlPlayPause.Opacity = 0.35;
+                ControlBack.IsEnabled = ControlForward.IsEnabled = false;
+                ControlBack.Opacity = ControlForward.Opacity = 0.35;
+                return;
+            }
+
+            SongTitle.Text = cdpSong.Title;
+            SongArtist.Text = cdpSong.Artist;
+
+            SymbolPlayPause.Symbol = cdpSong.IsPlaying 
+                ? Wpf.Ui.Controls.SymbolRegular.Pause16 
+                : Wpf.Ui.Controls.SymbolRegular.Play16;
+            ControlPlayPause.IsEnabled = true;
+            ControlPlayPause.Opacity = 1.0;
+            ControlBack.IsEnabled = ControlForward.IsEnabled = true;
+            ControlBack.Opacity = ControlForward.Opacity = 1.0;
+
+            if (!string.IsNullOrEmpty(cdpSong.CoverUrl))
+            {
+                try
+                {
+                    BitmapImage img = new BitmapImage();
+                    img.BeginInit();
+                    img.UriSource = new Uri(cdpSong.CoverUrl);
+                    img.CacheOption = BitmapCacheOption.OnLoad;
+                    img.EndInit();
+                    img.Freeze();
+
+                    SongImage.ImageSource = img;
+                    SongImagePlaceholder.Visibility = Visibility.Collapsed;
+
+                    if (SettingsManager.Current.MediaFlyoutBackgroundBlur != 0)
+                    {
+                        var croppedImage = BitmapHelper.CropToSquare(img);
+                        switch (SettingsManager.Current.MediaFlyoutBackgroundBlur)
+                        {
+                            case 1: BackgroundImageStyle1.Source = croppedImage; break;
+                            case 2: BackgroundImageStyle2.Source = croppedImage; break;
+                            case 3: BackgroundImageStyle3.Source = croppedImage; break;
+                        }
+                    }
+                }
+                catch {}
+            }
+            else
+            {
+                SongImage.ImageSource = null;
+                SongImagePlaceholder.Visibility = Visibility.Visible;
+            }
+
+            if (SettingsManager.Current.RepeatEnabled && !SettingsManager.Current.CompactLayout)
+            {
+                ControlRepeat.Visibility = Visibility.Visible;
+                ControlRepeat.IsEnabled = true;
+                ControlRepeat.Opacity = 1.0;
+            }
+            else ControlRepeat.Visibility = Visibility.Collapsed;
+
+            if (SettingsManager.Current.ShuffleEnabled && !SettingsManager.Current.CompactLayout)
+            {
+                ControlShuffle.Visibility = Visibility.Visible;
+                ControlShuffle.IsEnabled = true;
+                ControlShuffle.Opacity = 1.0;
+            }
+            else ControlShuffle.Visibility = Visibility.Collapsed;
+
+            if (SettingsManager.Current.PlayerInfoEnabled)
+            {
+                MediaIdStackPanel.Visibility = Visibility.Visible;
+                MediaId.Text = "Lecteur Deezer";
+            }
+            else MediaIdStackPanel.Visibility = Visibility.Collapsed;
+        });
+    }
+
     private async void Back_Click(object sender, RoutedEventArgs e)
     {
         var activeSession = GetActiveMediaSession();
-        if (activeSession == null) return;
-
-        await activeSession.ControlSession.TrySkipPreviousAsync();
+        if (activeSession != null)
+        {
+            await activeSession.ControlSession.TrySkipPreviousAsync();
+        }
+        else if (SettingsManager.Current.DeezerQueueEnabled && await DeezerCdpService.IsCdpAvailableAsync())
+        {
+            await DeezerCdpService.PrevTrackAsync();
+            await Task.Delay(300);
+            ForceRefreshTaskbarWidget();
+        }
     }
 
     private async void PlayPause_Click(object sender, RoutedEventArgs e)
     {
         var activeSession = GetActiveMediaSession();
-        if (activeSession == null) return;
-
-        await activeSession.ControlSession.TryTogglePlayPauseAsync();
+        if (activeSession != null)
+        {
+            await activeSession.ControlSession.TryTogglePlayPauseAsync();
+        }
+        else if (SettingsManager.Current.DeezerQueueEnabled && await DeezerCdpService.IsCdpAvailableAsync())
+        {
+            await DeezerCdpService.TogglePlayPauseAsync();
+            await Task.Delay(300);
+            ForceRefreshTaskbarWidget();
+        }
     }
 
     private async void Forward_Click(object sender, RoutedEventArgs e)
     {
         var activeSession = GetActiveMediaSession();
-        if (activeSession == null) return;
-
-        await activeSession.ControlSession.TrySkipNextAsync();
+        if (activeSession != null)
+        {
+            await activeSession.ControlSession.TrySkipNextAsync();
+        }
+        else if (SettingsManager.Current.DeezerQueueEnabled && await DeezerCdpService.IsCdpAvailableAsync())
+        {
+            await DeezerCdpService.NextTrackAsync();
+            await Task.Delay(300);
+            ForceRefreshTaskbarWidget();
+        }
     }
 
     private async void Repeat_Click(object sender, RoutedEventArgs e)

@@ -233,6 +233,36 @@ public partial class TaskbarWidgetControl : UserControl
         SongImageScale.BeginAnimation(ScaleTransform.ScaleYProperty, scaleAnim);
     }
 
+    private bool _isLaunchingDeezer = false;
+
+    private void SetLoadingState(bool isLoading)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            if (isLoading)
+            {
+                SongImagePlaceholder.Symbol = SymbolRegular.ArrowSync24;
+                SongImagePlaceholder.Visibility = Visibility.Visible;
+                ToolTipService.SetToolTip(SongImageBorder, "Lancement de Deezer en cours...");
+                ToolTipService.SetToolTip(MainBorder, "Lancement de Deezer en cours...");
+
+                DoubleAnimation rotateAnim = new DoubleAnimation(0, 360, new Duration(TimeSpan.FromSeconds(1)))
+                {
+                    RepeatBehavior = RepeatBehavior.Forever
+                };
+                RotateTransform rotateTransform = new RotateTransform();
+                SongImagePlaceholder.RenderTransformOrigin = new Point(0.5, 0.5);
+                SongImagePlaceholder.RenderTransform = rotateTransform;
+                rotateTransform.BeginAnimation(RotateTransform.AngleProperty, rotateAnim);
+            }
+            else
+            {
+                SongImagePlaceholder.RenderTransform = null;
+                SongImagePlaceholder.Symbol = SymbolRegular.MusicNote220;
+            }
+        });
+    }
+
     private void Grid_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
         // Release bounce-back scale animation
@@ -251,7 +281,13 @@ public partial class TaskbarWidgetControl : UserControl
         {
             if (SettingsManager.Current.DeezerQueueEnabled)
             {
-                _ = DeezerCdpService.LaunchDeezerWithDebugPortAsync(forceRestartIfNoCdp: true);
+                if (_isLaunchingDeezer) return;
+                _isLaunchingDeezer = true;
+                SetLoadingState(true);
+                _ = Task.Run(async () =>
+                {
+                    await DeezerCdpService.LaunchDeezerWithDebugPortAsync(forceRestartIfNoCdp: true);
+                });
                 return;
             }
         }
@@ -262,6 +298,16 @@ public partial class TaskbarWidgetControl : UserControl
 
     public (double logicalWidth, double logicalHeight) CalculateSize(double dpiScale)
     {
+        if (string.IsNullOrEmpty(_actualTitle) && string.IsNullOrEmpty(_actualArtist))
+        {
+            MainStackPanel.Margin = new Thickness(4, 0, 4, 0);
+            return (44, 40);
+        }
+        else
+        {
+            MainStackPanel.Margin = new Thickness(4, 0, -100, 0);
+        }
+
         // calculate widget width - use cached values if text hasn't changed
         string currentTitle = _actualTitle;
         string currentArtist = _actualArtist;
@@ -614,9 +660,10 @@ public partial class TaskbarWidgetControl : UserControl
                 SongImage.ImageSource = icon;
                 BackgroundImage.Source = icon;
                 SongImageBorder.Margin = new Thickness(0, 0, 0, -2); // align image better when cover is present
-                SongImageBorder.Background = null;
                 MainGrid.Cursor = Cursors.Arrow;
                 SongImageBorder.Cursor = Cursors.Arrow;
+                _isLaunchingDeezer = false;
+                SetLoadingState(false);
             }
             else
             {
