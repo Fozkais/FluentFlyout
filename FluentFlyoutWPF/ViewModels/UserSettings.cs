@@ -216,6 +216,9 @@ public partial class UserSettings : ObservableObject
     public partial string SpotifyClientId { get; set; } = string.Empty;
 
     [ObservableProperty]
+    public partial string SpotifyRedirectUri { get; set; } = "http://localhost:8888/spotify-callback/";
+
+    [ObservableProperty]
     public partial string SpotifyAccessToken { get; set; } = string.Empty;
 
     [ObservableProperty]

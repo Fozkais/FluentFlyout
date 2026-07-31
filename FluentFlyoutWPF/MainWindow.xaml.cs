@@ -978,8 +978,11 @@ public partial class MainWindow : MicaWindow
 
         if (activeSession == null && (cdpSong == null || string.IsNullOrEmpty(cdpSong.Title)))
         {
-            if (!forceShow || !SettingsManager.Current.MediaFlyoutEnabled || FullscreenDetector.IsFullscreenApplicationRunning())
-                return;
+            if (!forceShow && !toggleMode)
+            {
+                if (!SettingsManager.Current.MediaFlyoutEnabled || FullscreenDetector.IsFullscreenApplicationRunning())
+                    return;
+            }
         }
 
         if ((!forceShow && !SettingsManager.Current.MediaFlyoutEnabled) ||

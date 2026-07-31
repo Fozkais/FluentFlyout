@@ -21,6 +21,13 @@ public static class SpotifyAuthService
 
     public static bool IsAuthenticated => !string.IsNullOrEmpty(SettingsManager.Current.SpotifyRefreshToken);
 
+    public static string GetRedirectUri()
+    {
+        string uri = SettingsManager.Current.SpotifyRedirectUri?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(uri)) return "http://127.0.0.1:8000/callback";
+        return uri;
+    }
+
     public static async Task<bool> AuthenticateAsync(string? customClientId = null)
     {
         string configuredId = SettingsManager.Current.SpotifyClientId?.Trim() ?? "";
@@ -32,17 +39,22 @@ public static class SpotifyAuthService
                 ? configuredId
                 : DefaultClientId);
 
+        string redirectUri = GetRedirectUri();
+
         try
         {
             string codeVerifier = GenerateCodeVerifier();
             string codeChallenge = GenerateCodeChallenge(codeVerifier);
 
             string scope = Uri.EscapeDataString("user-read-playback-state user-modify-playback-state user-read-currently-playing playlist-read-private playlist-read-collaborative");
-            string authUrl = $"https://accounts.spotify.com/authorize?response_type=code&client_id={clientId}&scope={scope}&redirect_uri={Uri.EscapeDataString(RedirectUri)}&code_challenge_method=S256&code_challenge={codeChallenge}";
+            string authUrl = $"https://accounts.spotify.com/authorize?response_type=code&client_id={clientId}&scope={scope}&redirect_uri={Uri.EscapeDataString(redirectUri)}&code_challenge_method=S256&code_challenge={codeChallenge}";
 
             using var listener = new HttpListener();
-            listener.Prefixes.Add("http://localhost:8888/callback/");
-            listener.Prefixes.Add("http://localhost:8888/spotify-callback/");
+            string prefix = redirectUri;
+            if (!prefix.EndsWith("/")) prefix += "/";
+            listener.Prefixes.Add(prefix);
+            if (!prefix.Contains("localhost")) listener.Prefixes.Add("http://localhost:8888/spotify-callback/");
+            if (!prefix.Contains("127.0.0.1:8000")) listener.Prefixes.Add("http://127.0.0.1:8000/callback/");
             listener.Start();
 
             Process.Start(new ProcessStartInfo
@@ -67,7 +79,7 @@ public static class SpotifyAuthService
 
             if (!string.IsNullOrEmpty(code))
             {
-                return await ExchangeCodeForTokenAsync(clientId, code, codeVerifier);
+                return await ExchangeCodeForTokenAsync(clientId, code, codeVerifier, redirectUri);
             }
         }
         catch (Exception ex)
@@ -78,7 +90,7 @@ public static class SpotifyAuthService
         return false;
     }
 
-    private static async Task<bool> ExchangeCodeForTokenAsync(string clientId, string code, string codeVerifier)
+    private static async Task<bool> ExchangeCodeForTokenAsync(string clientId, string code, string codeVerifier, string redirectUri)
     {
         try
         {
@@ -87,7 +99,7 @@ public static class SpotifyAuthService
             {
                 { "grant_type", "authorization_code" },
                 { "code", code },
-                { "redirect_uri", RedirectUri },
+                { "redirect_uri", redirectUri },
                 { "client_id", clientId },
                 { "code_verifier", codeVerifier }
             };

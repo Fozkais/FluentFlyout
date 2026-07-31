@@ -281,29 +281,31 @@ public partial class TaskbarWidgetControl : UserControl
         {
             if (SettingsManager.Current.PreferredMusicService == "Spotify" || (!SettingsManager.Current.DeezerQueueEnabled && SpotifyAuthService.IsAuthenticated))
             {
-                if (_isLaunchingDeezer) return;
-                _isLaunchingDeezer = true;
-                SetLoadingState(true);
-                _ = Task.Run(async () =>
+                if (!_isLaunchingDeezer)
                 {
-                    await SpotifyService.EnsureSpotifyRunningAsync();
-                });
-                return;
+                    _isLaunchingDeezer = true;
+                    SetLoadingState(true);
+                    _ = Task.Run(async () =>
+                    {
+                        await SpotifyService.EnsureSpotifyRunningAsync();
+                    });
+                }
             }
-            if (SettingsManager.Current.DeezerQueueEnabled)
+            else if (SettingsManager.Current.DeezerQueueEnabled)
             {
-                if (_isLaunchingDeezer) return;
-                _isLaunchingDeezer = true;
-                SetLoadingState(true);
-                _ = Task.Run(async () =>
+                if (!_isLaunchingDeezer)
                 {
-                    await DeezerCdpService.LaunchDeezerWithDebugPortAsync(forceRestartIfNoCdp: true);
-                });
-                return;
+                    _isLaunchingDeezer = true;
+                    SetLoadingState(true);
+                    _ = Task.Run(async () =>
+                    {
+                        await DeezerCdpService.LaunchDeezerWithDebugPortAsync(forceRestartIfNoCdp: true);
+                    });
+                }
             }
         }
 
-        // toggle main flyout when clicked
+        // Toggle media flyout window when clicked
         _mainWindow.ShowMediaFlyout(toggleMode: true, forceShow: true);
     }
 

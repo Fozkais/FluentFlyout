@@ -202,10 +202,7 @@
                 <ui:CardControl.Header>
                     <StackPanel Orientation="Vertical">
                         <TextBlock Text="Intégration Spotify (Web API 🟢)" FontSize="14" FontWeight="Regular" VerticalAlignment="Center" />
-                        <TextBlock Text="Contrôle direct via GSMTC inclus sans configuration. Pour la file d'attente et playlists Web API, renseignez votre Client ID." FontSize="12" Opacity="0.5" />
-                        <TextBlock FontSize="11" Opacity="0.6" Margin="0,2,0,0">
-                            URI de redirection à ajouter sur Spotify : <Run FontWeight="SemiBold" Text="http://localhost:8888/spotify-callback/" />
-                        </TextBlock>
+                        <TextBlock Text="Contrôle direct via GSMTC inclus sans configuration. Pour la file d'attente et playlists Web API, renseignez votre Client ID et Redirect URI." FontSize="12" Opacity="0.5" />
                     </StackPanel>
                 </ui:CardControl.Header>
                 <StackPanel Orientation="Vertical" HorizontalAlignment="Right" VerticalAlignment="Center">
@@ -214,9 +211,13 @@
                         <ui:Button Name="CreateAppButton" Content="Dashboard Spotify ↗" Click="CreateAppButton_Click" Margin="0,0,8,0" />
                         <ui:Button Name="SpotifyAuthButton" Content="Se connecter à Spotify" Click="SpotifyAuthButton_Click" Appearance="Primary" />
                     </StackPanel>
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,4">
                         <TextBlock Text="Client ID :" FontSize="11" Opacity="0.6" VerticalAlignment="Center" Margin="0,0,8,0" />
-                        <ui:TextBox Width="240" PlaceholderText="Collez votre Client ID Spotify ici" Text="{Binding SpotifyClientId, Mode=TwoWay}" FontSize="11" />
+                        <ui:TextBox Width="260" PlaceholderText="Collez votre Client ID Spotify ici" Text="{Binding SpotifyClientId, Mode=TwoWay}" FontSize="11" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <TextBlock Text="Redirect URI :" FontSize="11" Opacity="0.6" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <ui:TextBox Width="260" PlaceholderText="http://127.0.0.1:8000/callback" Text="{Binding SpotifyRedirectUri, Mode=TwoWay}" FontSize="11" />
                     </StackPanel>
                 </StackPanel>
             </ui:CardControl>
