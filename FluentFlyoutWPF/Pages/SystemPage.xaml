@@ -181,12 +181,46 @@
                 <controls:ToggleSwitch IsChecked="{Binding ShowUpdateNotifications, Mode=TwoWay}" />
             </ui:CardControl>
 
-            <!-- deezer cdp status section -->
-            <TextBlock Text="Intégration Deezer Desktop (Direct CDP ⚡)" FontSize="14" FontWeight="SemiBold" Margin="0,12,0,6" />
-            <ui:CardControl x:Name="DeezerCdpTitleCard" Tag="Indexable" Icon="{ui:SymbolIcon List20}" Margin="0,0,0,24">
+            <!-- Music Services & Integrations section -->
+            <TextBlock Text="Services Média &amp; Intégrations (Deezer, Spotify)" FontSize="14" FontWeight="SemiBold" Margin="0,12,0,6" />
+            
+            <ui:CardControl x:Name="PreferredServiceCard" Tag="Indexable" Icon="{ui:SymbolIcon MusicNote220}" Margin="0,0,0,3">
                 <ui:CardControl.Header>
                     <StackPanel Orientation="Vertical">
-                        <TextBlock Text="Mode Direct CDP (Port 9222)" FontSize="14" FontWeight="Regular" VerticalAlignment="Center" />
+                        <TextBlock Text="Lecteur de musique préféré" FontSize="14" FontWeight="Regular" VerticalAlignment="Center" />
+                        <TextBlock Text="Choisissez le service de musique prioritaire pour le widget et la file d'attente" FontSize="12" Opacity="0.5" />
+                    </StackPanel>
+                </ui:CardControl.Header>
+                <ComboBox x:Name="PreferredServiceComboBox" Width="200" SelectionChanged="PreferredServiceComboBox_SelectionChanged">
+                    <ComboBoxItem Content="Détection automatique" Tag="Auto" />
+                    <ComboBoxItem Content="Deezer Desktop (CDP)" Tag="Deezer" />
+                    <ComboBoxItem Content="Spotify (Web API)" Tag="Spotify" />
+                </ComboBox>
+            </ui:CardControl>
+
+            <ui:CardControl x:Name="SpotifyCard" Tag="Indexable" Icon="{ui:SymbolIcon MusicNote220}" Margin="0,0,0,3">
+                <ui:CardControl.Header>
+                    <StackPanel Orientation="Vertical">
+                        <TextBlock Text="Intégration Spotify (Web API 🟢)" FontSize="14" FontWeight="Regular" VerticalAlignment="Center" />
+                        <TextBlock Text="Connexion OAuth 2.0 PKCE à l'API Spotify. Vous pouvez renseigner votre Client ID Spotify ci-dessous si nécessaire." FontSize="12" Opacity="0.5" />
+                    </StackPanel>
+                </ui:CardControl.Header>
+                <StackPanel Orientation="Vertical" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Name="SpotifyStatusText" Text="Vérification Spotify..." FontSize="12" VerticalAlignment="Center" Margin="0,0,16,0" FontWeight="Medium" />
+                        <ui:Button Name="SpotifyAuthButton" Content="Se connecter à Spotify" Click="SpotifyAuthButton_Click" Appearance="Primary" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <TextBlock Text="Client ID :" FontSize="11" Opacity="0.6" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <ui:TextBox Width="210" PlaceholderText="Client ID Spotify (ex: 5f3a...)" Text="{Binding SpotifyClientId, Mode=TwoWay}" FontSize="11" />
+                    </StackPanel>
+                </StackPanel>
+            </ui:CardControl>
+
+            <ui:CardControl x:Name="DeezerCdpTitleCard" Tag="Indexable" Icon="{ui:SymbolIcon Desktop20}" Margin="0,0,0,16">
+                <ui:CardControl.Header>
+                    <StackPanel Orientation="Vertical">
+                        <TextBlock Text="Intégration Deezer Desktop (Direct CDP ⚡)" FontSize="14" FontWeight="Regular" VerticalAlignment="Center" />
                         <TextBlock Text="Contrôle direct du lecteur Deezer via le port de débogage 9222 sans jeton ni compte API." FontSize="12" Opacity="0.5" />
                     </StackPanel>
                 </ui:CardControl.Header>

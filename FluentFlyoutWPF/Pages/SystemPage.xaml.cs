@@ -23,7 +23,74 @@ public partial class SystemPage : Page
         InitializeComponent();
         DataContext = SettingsManager.Current;
         UpdateMonitorList();
+        InitPreferredServiceComboBox();
         UpdateCdpStatusAsync();
+        UpdateSpotifyStatusAsync();
+    }
+
+    private void InitPreferredServiceComboBox()
+    {
+        if (PreferredServiceComboBox == null) return;
+        string preferred = SettingsManager.Current.PreferredMusicService;
+        foreach (ComboBoxItem item in PreferredServiceComboBox.Items)
+        {
+            if (item.Tag?.ToString() == preferred)
+            {
+                PreferredServiceComboBox.SelectedItem = item;
+                break;
+            }
+        }
+        if (PreferredServiceComboBox.SelectedItem == null && PreferredServiceComboBox.Items.Count > 0)
+        {
+            PreferredServiceComboBox.SelectedIndex = 0;
+        }
+    }
+
+    private void PreferredServiceComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (PreferredServiceComboBox?.SelectedItem is ComboBoxItem item && item.Tag != null)
+        {
+            SettingsManager.Current.PreferredMusicService = item.Tag.ToString() ?? "Auto";
+            SettingsManager.SaveSettings();
+        }
+    }
+
+    private async void UpdateSpotifyStatusAsync()
+    {
+        if (SpotifyStatusText == null || SpotifyAuthButton == null) return;
+
+        bool isAuth = SpotifyAuthService.IsAuthenticated;
+        if (isAuth)
+        {
+            SpotifyStatusText.Text = "Statut : Connecté à Spotify 🟢";
+            SpotifyStatusText.Foreground = (System.Windows.Media.Brush)Application.Current.TryFindResource("MicaWPF.Brushes.SystemAccentColorPrimary") ?? System.Windows.Media.Brushes.Green;
+            SpotifyAuthButton.Content = "Se déconnecter";
+        }
+        else
+        {
+            SpotifyStatusText.Text = "Statut : Non connecté";
+            SpotifyStatusText.Foreground = System.Windows.Media.Brushes.Gray;
+            SpotifyAuthButton.Content = "Se connecter à Spotify";
+        }
+    }
+
+    private async void SpotifyAuthButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (SpotifyAuthButton == null) return;
+
+        if (SpotifyAuthService.IsAuthenticated)
+        {
+            SpotifyAuthService.Logout();
+            UpdateSpotifyStatusAsync();
+        }
+        else
+        {
+            SpotifyAuthButton.IsEnabled = false;
+            SpotifyStatusText.Text = "Connexion en cours...";
+            bool success = await SpotifyAuthService.AuthenticateAsync();
+            UpdateSpotifyStatusAsync();
+            SpotifyAuthButton.IsEnabled = true;
+        }
     }
 
     private async void UpdateCdpStatusAsync()

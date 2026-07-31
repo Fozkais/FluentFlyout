@@ -206,7 +206,7 @@
                     <ui:SymbolIcon Symbol="List20" FontSize="30" Filled="False" />
                 </ui:CardAction.Icon>
                 <StackPanel>
-                    <ui:TextBlock FontWeight="Medium" Text="File d'attente Deezer" />
+                    <ui:TextBlock FontWeight="Medium" Text="File d'attente &amp; Musique" />
                     <ui:TextBlock Appearance="Secondary" Text="{Binding DeezerQueueEnabled, Converter={StaticResource BoolToEnabledDisabledConverter}}">
                         <ui:TextBlock.Style>
                             <Style TargetType="ui:TextBlock">
